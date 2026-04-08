@@ -1,19 +1,28 @@
 """
-XAUUSD M15 Breakout & Retest Strategy – VectorBT Backtest (v2)
+XAUUSD M15 Breakout & Retest Strategy – VectorBT Backtest (v3)
 ===============================================================
 Futtatás:
     python xauusd_vectorbt_test.py
 
-Függőségek:
+Függőségek (kötelező):
     pip install vectorbt pandas numpy
 
-Adatforrás:
-    - Elsődleges: CSV export MT5-ből → fájlnév: XAUUSD_M15.csv
-      (MT5 → Tools → History Center → Export)
-      Várt formátum: <DATE>\t<TIME>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>
-    - Fallback: Szintetikus XAUUSD M15 (2 év, GBM + intraday vol minta)
+Függőségek (opcionális, MT5 API-hoz):
+    pip install MetaTrader5          # Windows/Wine szükséges
+    pip install tvdatafeed           # TradingView scraper (cross-platform)
+
+Adatforrás – prioritási sorrend:
+    1. MT5 Python API  (pip install MetaTrader5 + futó MT5 terminál)
+    2. tvdatafeed      (pip install tvdatafeed, internetkapcsolat)
+    3. XAUUSD_M15.csv  (MT5 History Center manual export)
+    4. Szintetikus adat (fallback, tesztelési célra)
+
+MT5 manual CSV export:
+    MT5 → View → Symbols → XAUUSD → Bars → Export CSV
+    vagy: Tools → History Center → XAUUSD M15 → Export
 """
 
+import os
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
@@ -25,13 +34,19 @@ np.random.seed(42)
 # ===========================================================================
 # PARAMÉTEREK
 # ===========================================================================
+TIMEFRAME           = "M15"   # "M5" vagy "M15" – ez vezérli az összes TF-függő paramétert
+SYMBOL              = "XAUUSD"
+YEARS_HISTORY       = 2       # MT5/tvdatafeed lekérési időszak (évek)
+
 SWING_LOOKBACK      = 20      # Swing high/low keresési ablak (gyertyák)
 MAX_RETEST_CANDLES  = 6       # Max gyertya breakout után retest-re várva
 RETEST_ZONE_PCT     = 0.15    # Retest zóna = ATR × ez az érték
 MIN_BREAKOUT_PTS    = 1.50    # Min breakout méret ($-ban, XAUUSD)
 RISK_REWARD         = 2.5     # TP = SL × RR
 ATR_PERIOD          = 14      # ATR periódus
-TREND_EMA_PERIOD    = 200     # EMA periódus trend szűrőhöz (M15 × 4 × 50 = H1 EMA50)
+# Trend EMA: H1 EMA50 ekvivalens az adott timeframe-en
+# M15 → 4×50=200 bar, M5 → 12×50=600 bar
+TREND_EMA_PERIOD    = 200 if TIMEFRAME == "M15" else 600
 MAX_RISK_PCT        = 1.0     # Max kockázat / trade (% of equity)
 SESSION_START       = 7       # Session start (UTC óra)
 SESSION_END         = 18      # Session end (UTC óra)
@@ -43,39 +58,163 @@ COMMISSION          = 0.25    # Spread/jutalék dolláronként (~ XAUUSD 0.25 pi
 # 1. ADATBETÖLTÉS / GENERÁLÁS
 # ===========================================================================
 
+# MT5 timeframe map
+_MT5_TF = {"M1": 1, "M5": 5, "M15": 15, "M30": 30, "H1": 16385, "H4": 16388, "D1": 16408}
+
+# VectorBT freq string map
+_VBT_FREQ = {"M5": "5min", "M15": "15min"}
+
+
+def load_from_mt5(symbol: str = SYMBOL, tf: str = TIMEFRAME, years: int = YEARS_HISTORY) -> pd.DataFrame:
+    """
+    Historikus OHLCV adat letöltése a futó MetaTrader 5 terminálból.
+    Szükséges: telepített MT5, futó terminál, bejelentkezve (demo is OK).
+
+    pip install MetaTrader5
+    """
+    try:
+        import MetaTrader5 as mt5
+        from datetime import datetime, timedelta
+
+        if not mt5.initialize():
+            raise RuntimeError(f"MT5 initialize() sikertelen: {mt5.last_error()}")
+
+        tf_code = getattr(mt5, f"TIMEFRAME_{tf}", None)
+        if tf_code is None:
+            raise ValueError(f"Ismeretlen timeframe: {tf}")
+
+        date_to   = datetime.utcnow()
+        date_from = date_to - timedelta(days=365 * years)
+
+        rates = mt5.copy_rates_range(symbol, tf_code, date_from, date_to)
+        mt5.shutdown()
+
+        if rates is None or len(rates) == 0:
+            raise RuntimeError("Nincs adat – ellenőrizd a symbol nevet és az MT5 kapcsolatot.")
+
+        df = pd.DataFrame(rates)
+        df["time"] = pd.to_datetime(df["time"], unit="s")
+        df.set_index("time", inplace=True)
+        df.index.name = None
+        df = df.rename(columns={
+            "open": "Open", "high": "High", "low": "Low",
+            "close": "Close", "tick_volume": "Volume"
+        })
+        return df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+
+    except ImportError:
+        raise ImportError("MetaTrader5 csomag nem található. Telepítsd: pip install MetaTrader5")
+
+
+def load_from_tvdatafeed(symbol: str = SYMBOL, tf: str = TIMEFRAME,
+                         years: int = YEARS_HISTORY) -> pd.DataFrame:
+    """
+    Historikus OHLCV adat letöltése TradingView-ból (tvdatafeed scraper).
+    Cross-platform, MT5 terminál NEM szükséges.
+
+    pip install tvdatafeed
+    """
+    try:
+        from tvdatafeed import TvDatafeed, Interval
+
+        _tv_interval = {
+            "M1":  Interval.in_1_minute,
+            "M5":  Interval.in_5_minute,
+            "M15": Interval.in_15_minute,
+            "M30": Interval.in_30_minute,
+            "H1":  Interval.in_1_hour,
+            "H4":  Interval.in_4_hour,
+            "D1":  Interval.in_daily,
+        }
+        if tf not in _tv_interval:
+            raise ValueError(f"Ismeretlen timeframe: {tf}")
+
+        bars_per_year = {"M5": 365 * 24 * 12, "M15": 365 * 24 * 4}.get(tf, 100_000)
+        n_bars = bars_per_year * years
+
+        print(f"  tvdatafeed: {symbol} {tf}, kért gyertyák: {n_bars:,}...")
+        tv = TvDatafeed()
+
+        # OANDA XAUUSD spot (legjobb minőség)
+        for exchange in ["OANDA", "FXCM", "TVC"]:
+            try:
+                df = tv.get_hist(symbol, exchange,
+                                 interval=_tv_interval[tf],
+                                 n_bars=min(n_bars, 20_000))  # API limit
+                if df is not None and len(df) > 100:
+                    df = df.rename(columns={
+                        "open": "Open", "high": "High", "low": "Low",
+                        "close": "Close", "volume": "Volume"
+                    })
+                    df.index = pd.to_datetime(df.index)
+                    df.index.name = None
+                    print(f"  Forrás: {exchange}, gyertyák: {len(df):,}")
+                    return df[["Open", "High", "Low", "Close", "Volume"]].astype(float).dropna()
+            except Exception:
+                continue
+        raise RuntimeError("tvdatafeed: minden exchange megpróbálva, nincs adat.")
+
+    except ImportError:
+        raise ImportError("tvdatafeed csomag nem található. Telepítsd: pip install tvdatafeed")
+
+
 def load_mt5_csv(filepath: str) -> pd.DataFrame:
-    """MT5 History Center CSV import."""
-    df = pd.read_csv(
-        filepath, sep="\t",
-        names=["Date", "Time", "Open", "High", "Low", "Close", "Volume"],
-        skiprows=1,
-    )
-    df["Datetime"] = pd.to_datetime(df["Date"] + " " + df["Time"])
-    df.set_index("Datetime", inplace=True)
-    return df[["Open", "High", "Low", "Close", "Volume"]].astype(float).dropna()
+    """MT5 History Center manuális CSV import.
 
-
-def generate_synthetic_xauusd(years: int = 2) -> pd.DataFrame:
+    MT5 export lépések:
+      View → Symbols → XAUUSD → Bars → Export CSV
+    Várt formátum: <DATE>\t<TIME>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>
     """
-    Szintetikus XAUUSD M15 OHLCV adatsor GBM alapon.
+    # Próbáljuk tab-elválasztóval (MT5 default)
+    try:
+        df = pd.read_csv(filepath, sep="\t", header=0)
+        # Különböző MT5 fejléc variációk
+        col_map = {}
+        for c in df.columns:
+            cl = c.strip().lower().lstrip("<").rstrip(">")
+            if cl in ("date", "time", "open", "high", "low", "close", "tickvol", "vol", "volume", "spread"):
+                col_map[c] = cl.capitalize()
+        df = df.rename(columns=col_map)
+
+        if "Date" in df.columns and "Time" in df.columns:
+            df["Datetime"] = pd.to_datetime(df["Date"].astype(str) + " " + df["Time"].astype(str))
+            df.set_index("Datetime", inplace=True)
+        elif df.index.dtype == "object":
+            df.index = pd.to_datetime(df.index)
+
+        # Tickvol → Volume átnevezés
+        if "Tickvol" in df.columns and "Volume" not in df.columns:
+            df = df.rename(columns={"Tickvol": "Volume"})
+
+        keep = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
+        return df[keep].astype(float).dropna()
+
+    except Exception as e:
+        raise ValueError(f"CSV betöltési hiba ({filepath}): {e}")
+
+
+def generate_synthetic_xauusd(years: int = 2, freq: str = "15min") -> pd.DataFrame:
+    """
+    Szintetikus XAUUSD OHLCV adatsor GBM alapon.
     Csak kereskedési napokat tartalmaz (hétfő–péntek).
+    freq: '5min' | '15min'
     """
-    # Kereskedési időpontok generálása (M15, hétfő–péntek, 00:00–23:45)
+    bars_per_day = 24 * 60 // int(freq.replace("min", ""))
     all_times = pd.date_range(
-        start="2023-01-02 00:00", periods=years * 252 * 96, freq="15min"
+        start="2023-01-02 00:00", periods=years * 252 * bars_per_day, freq=freq
     )
-    mask = all_times.weekday < 5   # csak hétköznap
+    mask = all_times.weekday < 5
     idx  = all_times[mask]
     n    = len(idx)
 
     # GBM paraméterek (XAUUSD reális)
     start_price  = 1_855.0
     daily_vol    = 0.011       # ~1.1% napi volatilitás
-    m15_vol      = daily_vol / np.sqrt(96)
-    m15_drift    = 0.00003 / 96
+    bar_vol      = daily_vol / np.sqrt(bars_per_day)
+    bar_drift    = 0.00003 / bars_per_day
 
     # Alap log-hozamok
-    lr = np.random.normal(m15_drift, m15_vol, n)
+    lr = np.random.normal(bar_drift, bar_vol, n)
 
     # Intraday volatilitás minta (London + NY session kiemelkedő)
     h = idx.hour
@@ -93,7 +232,7 @@ def generate_synthetic_xauusd(years: int = 2) -> pd.DataFrame:
     close = np.round(start_price * np.exp(np.cumsum(lr)), 2)
 
     # OHLCV
-    bar_rng = np.abs(np.random.normal(0, m15_vol * 1.8, n)) * close
+    bar_rng = np.abs(np.random.normal(0, bar_vol * 1.8, n)) * close
     bar_rng = np.clip(bar_rng, close * 0.0003, close * 0.012)
 
     up_body = np.random.uniform(0.3, 0.85, n)
@@ -458,20 +597,59 @@ if __name__ == "__main__":
   Induló tőke       : ${INIT_CASH:,}
 """)
 
-    # ── Adatbetöltés ─────────────────────────────────────────────────────────
-    import os
-    MT5_CSV = "XAUUSD_M15.csv"
-    if os.path.exists(MT5_CSV):
-        print(f"MT5 CSV betöltése: {MT5_CSV}")
-        df = load_mt5_csv(MT5_CSV)
-    else:
-        print("MT5 CSV nem található → szintetikus XAUUSD M15 adat generálása (2 év)...")
-        df = generate_synthetic_xauusd(years=2)
+    # ── Adatbetöltés – automatikus forrásválasztás ────────────────────────────
+    vbt_freq = _VBT_FREQ.get(TIMEFRAME, "15min")
+    csv_path = f"{SYMBOL}_{TIMEFRAME}.csv"
+    df       = None
+
+    print(f"Adatforrás keresése ({SYMBOL} {TIMEFRAME}, {YEARS_HISTORY} év)...")
+
+    # 1) MT5 Python API -------------------------------------------------------
+    try:
+        print("  [1] MT5 Python API...")
+        df = load_from_mt5(SYMBOL, TIMEFRAME, YEARS_HISTORY)
+        print(f"  ✓ MT5 API: {len(df):,} gyertya")
+    except ImportError:
+        print("  ✗ MetaTrader5 nincs (pip install MetaTrader5)")
+    except Exception as e:
+        print(f"  ✗ MT5 API: {e}")
+
+    # 2) tvdatafeed -----------------------------------------------------------
+    if df is None:
+        try:
+            print("  [2] tvdatafeed (TradingView OANDA)...")
+            df = load_from_tvdatafeed(SYMBOL, TIMEFRAME, YEARS_HISTORY)
+            print(f"  ✓ tvdatafeed: {len(df):,} gyertya")
+        except ImportError:
+            print("  ✗ tvdatafeed nincs (pip install tvdatafeed)")
+        except Exception as e:
+            print(f"  ✗ tvdatafeed: {e}")
+
+    # 3) Helyi CSV ------------------------------------------------------------
+    if df is None:
+        if os.path.exists(csv_path):
+            try:
+                print(f"  [3] Helyi CSV: {csv_path}")
+                df = load_mt5_csv(csv_path)
+                print(f"  ✓ CSV: {len(df):,} gyertya")
+            except Exception as e:
+                print(f"  ✗ CSV hiba: {e}")
+        else:
+            print(f"  ✗ CSV nem található ({csv_path})")
+            print(f"       MT5 export: View → Symbols → {SYMBOL} → Bars → Export")
+
+    # 4) Szintetikus fallback -------------------------------------------------
+    if df is None:
+        tf_mins = int(TIMEFRAME.replace("M", ""))
+        print(f"  [4] Szintetikus adat ({YEARS_HISTORY} év, {TIMEFRAME})...")
+        df = generate_synthetic_xauusd(years=YEARS_HISTORY, freq=f"{tf_mins}min")
+        print(f"  ✓ Szintetikus: {len(df):,} gyertya")
 
     avg_atr = atr_series(df["High"], df["Low"], df["Close"], ATR_PERIOD).mean()
-    print(f"Betöltve: {len(df):,} gyertya | {df.index[0]} → {df.index[-1]}")
-    print(f"Ár tartomány: ${df['Close'].min():.2f} – ${df['Close'].max():.2f}")
-    print(f"Átlag ATR   : ${avg_atr:.2f}")
+    print(f"\nBetöltve  : {len(df):,} gyertya")
+    print(f"Időszak   : {df.index[0]} → {df.index[-1]}")
+    print(f"Ár tartom.: ${df['Close'].min():.2f} – ${df['Close'].max():.2f}")
+    print(f"Átlag ATR : ${avg_atr:.2f}")
 
     # ── Szignálok generálása ─────────────────────────────────────────────────
     print("\nSzignálok generálása...")
