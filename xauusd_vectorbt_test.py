@@ -159,38 +159,42 @@ def load_from_tvdatafeed(symbol: str = SYMBOL, tf: str = TIMEFRAME,
 
 
 def load_mt5_csv(filepath: str) -> pd.DataFrame:
-    """MT5 History Center manuális CSV import.
-
-    MT5 export lépések:
-      View → Symbols → XAUUSD → Bars → Export CSV
-    Várt formátum: <DATE>\t<TIME>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>
     """
-    # Próbáljuk tab-elválasztóval (MT5 default)
-    try:
-        df = pd.read_csv(filepath, sep="\t", header=0)
-        # Különböző MT5 fejléc variációk
-        col_map = {}
-        for c in df.columns:
-            cl = c.strip().lower().lstrip("<").rstrip(">")
-            if cl in ("date", "time", "open", "high", "low", "close", "tickvol", "vol", "volume", "spread"):
-                col_map[c] = cl.capitalize()
-        df = df.rename(columns=col_map)
+    Általános OHLCV CSV betöltő – támogatott formátumok:
+      - MT5 tab-elválasztós export: <DATE>\t<TIME>\t<OPEN>...
+      - Standard comma CSV:         datetime,Open,High,Low,Close,Volume
+    """
+    # Próbáljuk kitalálni az elválasztót
+    with open(filepath, "r") as f:
+        first_line = f.readline()
+    sep = "\t" if "\t" in first_line else ","
 
-        if "Date" in df.columns and "Time" in df.columns:
-            df["Datetime"] = pd.to_datetime(df["Date"].astype(str) + " " + df["Time"].astype(str))
-            df.set_index("Datetime", inplace=True)
-        elif df.index.dtype == "object":
-            df.index = pd.to_datetime(df.index)
+    df = pd.read_csv(filepath, sep=sep, header=0)
+    df.columns = [c.strip().lower().lstrip("<").rstrip(">") for c in df.columns]
 
-        # Tickvol → Volume átnevezés
-        if "Tickvol" in df.columns and "Volume" not in df.columns:
-            df = df.rename(columns={"Tickvol": "Volume"})
+    # Datetime index felépítése
+    if "datetime" in df.columns:
+        df.index = pd.to_datetime(df["datetime"])
+        df = df.drop(columns=["datetime"])
+    elif "date" in df.columns and "time" in df.columns:
+        df.index = pd.to_datetime(df["date"].astype(str) + " " + df["time"].astype(str))
+        df = df.drop(columns=["date", "time"])
+    elif "date" in df.columns:
+        df.index = pd.to_datetime(df["date"])
+        df = df.drop(columns=["date"])
+    else:
+        df.index = pd.to_datetime(df.index)
 
-        keep = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
-        return df[keep].astype(float).dropna()
+    df.index.name = None
 
-    except Exception as e:
-        raise ValueError(f"CSV betöltési hiba ({filepath}): {e}")
+    # Egységes oszlopnevek
+    rename = {"tickvol": "volume", "vol": "volume", "tick_volume": "volume"}
+    df = df.rename(columns=rename)
+
+    keep = [c for c in ["open", "high", "low", "close", "volume"] if c in df.columns]
+    df = df[keep]
+    df.columns = [c.capitalize() for c in df.columns]
+    return df.astype(float).dropna().sort_index()
 
 
 def generate_synthetic_xauusd(years: int = 2, freq: str = "15min") -> pd.DataFrame:
@@ -625,12 +629,32 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"  ✗ tvdatafeed: {e}")
 
-    # 3) Helyi CSV ------------------------------------------------------------
+    # 3) Helyi CSV – több lehetséges fájlnevet próbálunk ----------------------
     if df is None:
-        if os.path.exists(csv_path):
+        # Keresési prioritás: pontos név → pattern-alapú keresés
+        candidate_csvs = [
+            csv_path,                                        # XAUUSD_M15.csv
+            f"{SYMBOL}_{TIMEFRAME.lower()}.csv",             # xauusd_m15.csv
+        ]
+        # Összes CSV a mappában, ami tartalmazza a symbol-t és a timeframe-et
+        import glob
+        for pattern in [f"{SYMBOL}*{TIMEFRAME[1:]}*min*.csv",
+                        f"{SYMBOL}*{TIMEFRAME}*.csv",
+                        f"*{SYMBOL}*15*.csv",
+                        f"*XAUUSD*.csv", f"*xauusd*.csv"]:
+            candidate_csvs += glob.glob(os.path.join(os.path.dirname(
+                os.path.abspath(__file__)), pattern))
+
+        found_csv = None
+        for path in dict.fromkeys(candidate_csvs):  # deduplicate, preserve order
+            if os.path.exists(path):
+                found_csv = path
+                break
+
+        if found_csv:
             try:
-                print(f"  [3] Helyi CSV: {csv_path}")
-                df = load_mt5_csv(csv_path)
+                print(f"  [3] Helyi CSV: {os.path.basename(found_csv)}")
+                df = load_mt5_csv(found_csv)
                 print(f"  ✓ CSV: {len(df):,} gyertya")
             except Exception as e:
                 print(f"  ✗ CSV hiba: {e}")
