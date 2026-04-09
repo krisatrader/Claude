@@ -1,6 +1,17 @@
 """
-XAUUSD M15 Breakout & Retest Strategy – VectorBT Backtest (v3)
-===============================================================
+XAUUSD M15 Multi-Timeframe Breakout & Retest Strategy – VectorBT Backtest (v4)
+===============================================================================
+Stratégia logika:
+  1. W1 (heti) EMA10 → elsődleges piaci irány (Long/Short bias)
+  2. H1 EMA50         → másodlagos belépési irány (sessionszintű trend)
+  3. M15 Breakout + Retest → pontos belépési szignál
+  → Kereskedés CSAK ha W1 és H1 ugyanabba az irányba mutat
+
+Célok:
+  - Havi ~5% profit
+  - Max 1 kötés/nap
+  - Max SL 1% / trade
+
 Futtatás:
     python xauusd_vectorbt_test.py
 
@@ -8,21 +19,12 @@ Függőségek (kötelező):
     pip install vectorbt pandas numpy
 
 Függőségek (opcionális, MT5 API-hoz):
-    pip install MetaTrader5          # Windows/Wine szükséges
-    pip install tvdatafeed           # TradingView scraper (cross-platform)
-
-Adatforrás – prioritási sorrend:
-    1. MT5 Python API  (pip install MetaTrader5 + futó MT5 terminál)
-    2. tvdatafeed      (pip install tvdatafeed, internetkapcsolat)
-    3. XAUUSD_M15.csv  (MT5 History Center manual export)
-    4. Szintetikus adat (fallback, tesztelési célra)
-
-MT5 manual CSV export:
-    MT5 → View → Symbols → XAUUSD → Bars → Export CSV
-    vagy: Tools → History Center → XAUUSD M15 → Export
+    pip install MetaTrader5   # Windows/Wine szükséges
+    pip install tvdatafeed    # TradingView scraper (cross-platform)
 """
 
 import os
+import glob
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
@@ -34,24 +36,52 @@ np.random.seed(42)
 # ===========================================================================
 # PARAMÉTEREK
 # ===========================================================================
-TIMEFRAME           = "M15"   # "M5" vagy "M15" – ez vezérli az összes TF-függő paramétert
+TIMEFRAME           = "M15"   # "M5" vagy "M15"
 SYMBOL              = "XAUUSD"
-YEARS_HISTORY       = 2       # MT5/tvdatafeed lekérési időszak (évek)
+YEARS_HISTORY       = 2       # MT5/tvdatafeed lekérési időszak
 
-SWING_LOOKBACK      = 20      # Swing high/low keresési ablak (gyertyák)
-MAX_RETEST_CANDLES  = 6       # Max gyertya breakout után retest-re várva
-RETEST_ZONE_PCT     = 0.15    # Retest zóna = ATR × ez az érték
-MIN_BREAKOUT_PTS    = 1.50    # Min breakout méret ($-ban, XAUUSD)
-RISK_REWARD         = 2.5     # TP = SL × RR
-ATR_PERIOD          = 14      # ATR periódus
-# Trend EMA: H1 EMA50 ekvivalens az adott timeframe-en
-# M15 → 4×50=200 bar, M5 → 12×50=600 bar
-TREND_EMA_PERIOD    = 200 if TIMEFRAME == "M15" else 600
-MAX_RISK_PCT        = 1.0     # Max kockázat / trade (% of equity)
-SESSION_START       = 7       # Session start (UTC óra)
-SESSION_END         = 18      # Session end (UTC óra)
-INIT_CASH           = 10_000  # Induló tőke ($)
-COMMISSION          = 0.25    # Spread/jutalék dolláronként (~ XAUUSD 0.25 pip)
+# ── M15 Breakout paraméterek ────────────────────────────────────────────────
+SWING_LOOKBACK      = 20      # Swing high/low ablak (M15 gyertyák)
+MAX_RETEST_CANDLES  = 10      # Max várakozás retestre (gyertyák)
+RETEST_ZONE_PCT     = 0.30    # Retest zóna tűrése
+MIN_BREAKOUT_PTS    = 0.60    # Min breakout méret ($)
+ATR_PERIOD          = 14
+SWING_LEVELS        = [8, 15, 25]  # Párhuzamos swing szintek (több szignál)
+
+# ── HTF Trend paraméterek ───────────────────────────────────────────────────
+W1_EMA_PERIOD       = 10      # Heti EMA periódus (W1 trend)
+H1_EMA_PERIOD       = 50      # Óra EMA periódus (H1 trend)
+# Konfliktus kezelés: "strict" = W1+H1 egyezés kell (kevesebb, jobb trade)
+#                     "w1_only" = csak W1 szükséges (több trade)
+HTF_MODE            = "w1_only"  # "strict"=W1+H1 egyezés (kevesebb trade, kisebb DD)
+                                  # "w1_only"=csak W1 (több trade, jobb havi hozam)
+
+# ── Kockázatkezelés ─────────────────────────────────────────────────────────
+# STRATEGY_MODE:
+#   "fixed_tp"  – fix TP = SL × RISK_REWARD
+#   "trailing"  – trailing stop, nincs fix TP (a nyertesek futnak)
+STRATEGY_MODE       = "fixed_tp"  # "fixed_tp" | "trailing"
+RISK_REWARD         = 3.0     # TP = SL × 3.0 (= 2.4% TP, ha SL=0.8%)
+ATR_SL_MULT         = 2.0     # (referencia, nem használt)
+TRAIL_STOP_PCT      = 0.008   # SL távolság %-ban – MINDKÉT módban pozícióméret alap
+LONG_RISK_PCT       = 1.0     # Long kockázat max 1% of equity (FTMO szabály)
+SHORT_RISK_PCT      = 0.0     # shortokat kihagyjuk (XAUUSD bull piac)
+MAX_RISK_PCT        = LONG_RISK_PCT
+MAX_SL_PCT          = 0.020   # Max SL távolság (2% of price, skip ha szélesebb)
+MAX_TRADES_PER_DAY  = 2       # Max kötés naponta
+
+# ── FTMO Prop Trading Szabályok ─────────────────────────────────────────────
+# FTMO Challenge/Funded: max napi veszteség 5%, max összes DD 10%
+# Stratégia biztonsági margóval:
+FTMO_DAILY_LOSS_LIMIT  = 0.045   # 4.5% – ha elér, ne nyisson új trade-t aznap
+FTMO_MAX_DD_LIMIT      = 0.090   # 9% – ha összes DD eléri, leállítás (10% FTMO limit)
+FTMO_ACCOUNT_SIZE      = 10_000  # FTMO Challenge standard méret
+
+# ── Session és tőke ─────────────────────────────────────────────────────────
+SESSION_START       = 7       # UTC óra
+SESSION_END         = 18
+INIT_CASH           = FTMO_ACCOUNT_SIZE
+COMMISSION          = 0.60    # USD / oz round-trip (FTMO spread ~$0.30 + commission $0.30)
 
 
 # ===========================================================================
@@ -270,156 +300,224 @@ def atr_series(high, low, close, period=14) -> pd.Series:
     return tr.ewm(span=period, adjust=False).mean()
 
 
+def compute_htf_bias(df: pd.DataFrame) -> pd.Series:
+    """
+    Kiszámolja a magasabb időkeretű (HTF) irányt az M15 adatból.
+
+    W1 (heti) EMA10 + H1 EMA50 alapján:
+      +1 = mindkét HTF bullish  → csak LONG belépések engedélyezve
+      -1 = mindkét HTF bearish  → csak SHORT belépések engedélyezve
+       0 = konfliktus            → nincs kereskedés (ha HTF_MODE="strict")
+              vagy = W1 irány   (ha HTF_MODE="w1_only")
+
+    A bias értéke az M15 index-re van visszavetítve (ffill).
+    """
+    # ── W1 trend ─────────────────────────────────────────────────────────────
+    w1 = df["Close"].resample("W").last().dropna()
+    w1_ema = w1.ewm(span=W1_EMA_PERIOD, adjust=False).mean()
+    # Shift(1): az EMA előző heti értékéhez képest döntünk (no look-ahead)
+    w1_bull = (w1 > w1_ema.shift(1)).astype(int).replace(0, -1)
+    w1_m15  = w1_bull.reindex(df.index, method="ffill").fillna(0)
+
+    # ── H1 trend ─────────────────────────────────────────────────────────────
+    h1 = df["Close"].resample("1h").last().dropna()
+    h1_ema = h1.ewm(span=H1_EMA_PERIOD, adjust=False).mean()
+    h1_bull = (h1 > h1_ema.shift(1)).astype(int).replace(0, -1)
+    h1_m15  = h1_bull.reindex(df.index, method="ffill").fillna(0)
+
+    # ── Kombináció ────────────────────────────────────────────────────────────
+    if HTF_MODE == "strict":
+        # Mindkét HTF egyezés kell
+        bias = pd.Series(0, index=df.index, dtype=int)
+        bias[(w1_m15 == 1) & (h1_m15 == 1)]  =  1
+        bias[(w1_m15 == -1) & (h1_m15 == -1)] = -1
+    else:  # w1_only
+        bias = w1_m15.astype(int)
+
+    return bias
+
+
 # ===========================================================================
 # 3. SZIGNÁL GENERÁLÁS
 # ===========================================================================
 
 def generate_signals(df: pd.DataFrame) -> dict:
     """
-    Végigmegy az adatsoron és visszaadja:
-      - long_entries / short_entries (bool Series)
-      - sl_ratio / tp_ratio         (float Series, arány entry price-hoz képest)
-      - size_usd                    (float Series, pozícióméret USD-ben)
+    Multi-Timeframe Breakout & Retest szignálgenerátor.
 
-    Megjegyzés: VectorBT sl_stop / tp_stop értéke az entry ártól való
-    eltérést várja decimális arányban (pl. 0.01 = 1%).
+    Belépési logika:
+      1. HTF bias meghatározása (W1 + H1)
+      2. M15 breakout az HTF irányában
+      3. Retest konfirmáció bullish/bearish gyertyával
+      4. SL/TP számítás ATR alapon
+
+    Visszatér:
+      long_entries, short_entries  (bool Series)
+      sl_ratio, tp_ratio           (float Series – arány entry price-hoz)
+      size_usd                     (float Series – oz darabszám)
     """
-    n     = len(df)
-    close = df["Close"].values
-    high  = df["High"].values
-    low   = df["Low"].values
-    open_ = df["Open"].values
-    idx   = df.index
+    print("  HTF bias számítása (W1 + H1)...")
+    htf_bias = compute_htf_bias(df)
 
-    atr_s  = atr_series(df["High"], df["Low"], df["Close"], ATR_PERIOD)
-    ema_s  = df["Close"].ewm(span=TREND_EMA_PERIOD, adjust=False).mean()
-    sh_s   = df["High"].shift(2).rolling(SWING_LOOKBACK).max()
-    sl_s   = df["Low"].shift(2).rolling(SWING_LOOKBACK).min()
+    # Statisztika
+    long_bias_pct  = (htf_bias == 1).mean()  * 100
+    short_bias_pct = (htf_bias == -1).mean() * 100
+    neut_bias_pct  = (htf_bias == 0).mean()  * 100
+    print(f"  HTF irány: Long {long_bias_pct:.0f}% | Short {short_bias_pct:.0f}% | Semleges {neut_bias_pct:.0f}%")
 
-    atr_v  = atr_s.values
-    ema_v  = ema_s.values
-    sh_v   = sh_s.values
-    slo_v  = sl_s.values
+    n      = len(df)
+    close  = df["Close"].values
+    high   = df["High"].values
+    low    = df["Low"].values
+    open_  = df["Open"].values
+    idx    = df.index
+    bias_v = htf_bias.values
+
+    atr_v  = atr_series(df["High"], df["Low"], df["Close"], ATR_PERIOD).values
     hours  = idx.hour
 
-    # Kimeneti tömbök
+    # Párhuzamos swing szintek (SWING_LEVELS = [8, 15, 25])
+    swing_highs = [df["High"].shift(2).rolling(lb).max().values for lb in SWING_LEVELS]
+    swing_lows  = [df["Low"].shift(2).rolling(lb).min().values  for lb in SWING_LEVELS]
+    n_lvl = len(SWING_LEVELS)
+
     long_e   = np.zeros(n, dtype=bool)
     short_e  = np.zeros(n, dtype=bool)
-    sl_ratio = np.full(n, np.nan)   # SL távolság / entry_price  (pozitív)
-    tp_ratio = np.full(n, np.nan)   # TP távolság / entry_price  (pozitív)
-    size_usd = np.zeros(n)          # Pozícióméret USD-ben
+    sl_ratio = np.full(n, np.nan)
+    tp_ratio = np.full(n, np.nan)
+    size_usd = np.zeros(n)
 
-    # Állapotgép
-    bo_dir     = 0
-    bo_level   = 0.0
-    rt_count   = 0
-    waiting    = False
-    bo_atr     = 0.0
-    last_day   = None
-    in_trade   = False
-    trade_end  = -1
+    # Állapotgép – egy per swing szint
+    bo_dir   = [0]   * n_lvl
+    bo_level = [0.0] * n_lvl
+    bo_atr_l = [0.0] * n_lvl
+    rt_count = [0]   * n_lvl
+    waiting  = [False] * n_lvl
 
-    for i in range(SWING_LOOKBACK + 5, n - 1):
+    last_day        = None
+    trades_today    = 0
+    daily_pnl_frac  = 0.0   # napi PnL tört (FTMO napi limit követése)
+    equity          = float(INIT_CASH)
+    ftmo_stopped    = False  # ha max DD eléri, leállítás
 
-        # Pozíció lezárásának szimulációja (VectorBT kezeli, de az 1-trade/nap
-        # logikához szükség van arra, hogy tudjuk, "befejeztes-e" a trade)
-        if in_trade and i > trade_end:
-            in_trade = False
+    for i in range(max(SWING_LEVELS) + 5, n - 1):
+
+        # FTMO equity stop – ha 9%-ot esett az equity, ne nyisson új trade-t
+        if ftmo_stopped:
+            continue
 
         curr_day = idx[i].date()
-        if last_day == curr_day:
+        if curr_day != last_day:
+            trades_today   = 0
+            daily_pnl_frac = 0.0
+            last_day       = curr_day
+
+        # FTMO napi veszteség limit: ha nap közben -4.5% → állj le aznap
+        if daily_pnl_frac <= -FTMO_DAILY_LOSS_LIMIT:
             continue
-        if in_trade:
+
+        if trades_today >= MAX_TRADES_PER_DAY:
             continue
         if not (SESSION_START <= int(hours[i]) < SESSION_END):
             continue
 
+        htf = bias_v[i]
+        if htf == 0:
+            continue
+
         cur_atr = atr_v[i]
-        swing_h = sh_v[i]
-        swing_l = slo_v[i]
-
-        if np.isnan(cur_atr) or np.isnan(swing_h) or np.isnan(swing_l):
-            continue
-        if cur_atr <= 0:
+        if np.isnan(cur_atr) or cur_atr <= 0:
             continue
 
-        p_close = close[i - 1]
-        p_open  = open_[i - 1]
-        p_high  = high[i - 1]
-        p_low   = low[i - 1]
-        c_close = close[i]
-        trend   = 1 if c_close > ema_v[i] else -1
+        p_c = close[i - 1];  p_o = open_[i - 1]
+        p_h = high[i - 1];   p_l = low[i - 1]
+        c_c = close[i]
 
-        # ── Breakout detektálás ──────────────────────────────────────────────
-        if not waiting:
-            if p_close > swing_h + MIN_BREAKOUT_PTS and trend == 1:
-                bo_dir, bo_level, bo_atr = 1, swing_h, cur_atr
-                rt_count, waiting = 0, True
-            elif p_close < swing_l - MIN_BREAKOUT_PTS and trend == -1:
-                bo_dir, bo_level, bo_atr = -1, swing_l, cur_atr
-                rt_count, waiting = 0, True
+        entry_taken = False
 
-        # ── Retest várakozás ─────────────────────────────────────────────────
-        else:
-            rt_count += 1
-            if rt_count > MAX_RETEST_CANDLES:
-                waiting, bo_dir = False, 0
+        for lvl in range(n_lvl):
+            if entry_taken:
+                break
+
+            sh = swing_highs[lvl][i]
+            sl = swing_lows[lvl][i]
+            if np.isnan(sh) or np.isnan(sl):
                 continue
 
-            zone_half  = bo_atr * RETEST_ZONE_PCT
-            z_up       = bo_level + zone_half
-            z_dn       = bo_level - zone_half
-            entry_px   = c_close        # piacra lép a szignál gyertya zárásán
+            # ── Breakout detektálás ──────────────────────────────────────────
+            if not waiting[lvl]:
+                if htf == 1 and p_c > sh + MIN_BREAKOUT_PTS:
+                    bo_dir[lvl], bo_level[lvl], bo_atr_l[lvl] = 1, sh, cur_atr
+                    rt_count[lvl] = 0;  waiting[lvl] = True
+                elif htf == -1 and p_c < sl - MIN_BREAKOUT_PTS:
+                    bo_dir[lvl], bo_level[lvl], bo_atr_l[lvl] = -1, sl, cur_atr
+                    rt_count[lvl] = 0;  waiting[lvl] = True
 
-            if bo_dir == 1:
-                touched = (p_low <= z_up) and (p_high >= z_dn)
-                bullish = (p_close > p_open and
-                           (p_close - p_open) > 0.3 * (p_high - p_low + 1e-9))
-                if touched and bullish:
-                    # Min SL: max(entry-low + buffer, ATR×0.5, 0.15% of price)
-                    raw_sl = entry_px - p_low + bo_atr * 0.25
-                    sl_d   = max(raw_sl, bo_atr * 0.5, entry_px * 0.0015)
-                    tp_d   = sl_d * RISK_REWARD
+            # ── Retest várakozás ─────────────────────────────────────────────
+            else:
+                if (bo_dir[lvl] == 1 and htf != 1) or (bo_dir[lvl] == -1 and htf != -1):
+                    waiting[lvl], bo_dir[lvl] = False, 0
+                    continue
 
-                    # SL max 1.5% of price ellenőrzés (túl nagy SL → skip)
-                    if sl_d / entry_px > 0.015:
-                        waiting, bo_dir = False, 0
-                        continue
+                rt_count[lvl] += 1
+                if rt_count[lvl] > MAX_RETEST_CANDLES:
+                    waiting[lvl], bo_dir[lvl] = False, 0
+                    continue
 
-                    long_e[i]   = True
-                    sl_ratio[i] = sl_d / entry_px
-                    tp_ratio[i] = tp_d / entry_px
-                    # oz = risk_money / sl_per_oz  (max 30 oz cap)
-                    size_usd[i] = min((INIT_CASH * MAX_RISK_PCT / 100.0) / sl_d, 30.0)
+                zone = bo_atr_l[lvl] * RETEST_ZONE_PCT
+                z_up = bo_level[lvl] + zone
+                z_dn = bo_level[lvl] - zone
 
-                    last_day   = curr_day
-                    in_trade   = True
-                    trade_end  = i + MAX_RETEST_CANDLES * 4
-                    waiting, bo_dir = False, 0
+                if bo_dir[lvl] == 1:  # ── LONG ───────────────────────────────
+                    touched = (p_l <= z_up) and (p_h >= z_dn)
+                    bullish = (p_c > p_o and (p_c - p_o) > 0.25 * (p_h - p_l + 1e-9))
+                    if touched and bullish:
+                        # Mindkét módban TRAIL_STOP_PCT alapú SL (0.8% → 5 oz pozíció)
+                        # fixed_tp: fix SL + fix TP=3× (nincs trailing)
+                        # trailing:  trailing SL, nincs TP
+                        sl_d = c_c * TRAIL_STOP_PCT
+                        if STRATEGY_MODE == "fixed_tp" and sl_d / c_c > MAX_SL_PCT:
+                            waiting[lvl], bo_dir[lvl] = False, 0
+                            continue
+                        risk_amount = equity * LONG_RISK_PCT / 100.0
+                        long_e[i]   = True
+                        sl_ratio[i] = sl_d / c_c
+                        tp_ratio[i] = (sl_d * RISK_REWARD) / c_c if STRATEGY_MODE == "fixed_tp" else np.nan
+                        size_usd[i] = min(risk_amount / sl_d, 35.0)
+                        # FTMO: becsült veszteség hatása a napi PnL-re
+                        est_loss = size_usd[i] * sl_d
+                        daily_pnl_frac -= est_loss / INIT_CASH
+                        if (equity - est_loss) / INIT_CASH < (1.0 - FTMO_MAX_DD_LIMIT):
+                            ftmo_stopped = True
+                        trades_today += 1
+                        waiting[lvl], bo_dir[lvl] = False, 0
+                        entry_taken = True
+                        # Töröljük a többi szint pending breakoutját is
+                        for k in range(n_lvl):
+                            waiting[k], bo_dir[k] = False, 0
 
-            elif bo_dir == -1:
-                touched = (p_high >= z_dn) and (p_low <= z_up)
-                bearish = (p_close < p_open and
-                           (p_open - p_close) > 0.3 * (p_high - p_low + 1e-9))
-                if touched and bearish:
-                    raw_sl = p_high - entry_px + bo_atr * 0.25
-                    sl_d   = max(raw_sl, bo_atr * 0.5, entry_px * 0.0015)
-                    tp_d   = sl_d * RISK_REWARD
-
-                    if sl_d / entry_px > 0.015:
-                        waiting, bo_dir = False, 0
-                        continue
-
-                    short_e[i]  = True
-                    sl_ratio[i] = sl_d / entry_px
-                    tp_ratio[i] = tp_d / entry_px
-                    # oz = risk_money / sl_per_oz  (max 30 oz cap)
-                    size_usd[i] = min((INIT_CASH * MAX_RISK_PCT / 100.0) / sl_d, 30.0)
-
-                    last_day   = curr_day
-                    in_trade   = True
-                    trade_end  = i + MAX_RETEST_CANDLES * 4
-                    waiting, bo_dir = False, 0
+                elif bo_dir[lvl] == -1 and SHORT_RISK_PCT > 0:  # ── SHORT ───
+                    touched = (p_h >= z_dn) and (p_l <= z_up)
+                    bearish = (p_c < p_o and (p_o - p_c) > 0.25 * (p_h - p_l + 1e-9))
+                    if touched and bearish:
+                        sl_d = c_c * TRAIL_STOP_PCT  # short is: same % SL
+                        if STRATEGY_MODE == "fixed_tp" and sl_d / c_c > MAX_SL_PCT:
+                            waiting[lvl], bo_dir[lvl] = False, 0
+                            continue
+                        risk_amount_s = equity * SHORT_RISK_PCT / 100.0
+                        short_e[i]  = True
+                        sl_ratio[i] = sl_d / c_c
+                        tp_ratio[i] = (sl_d * RISK_REWARD) / c_c if STRATEGY_MODE == "fixed_tp" else np.nan
+                        size_usd[i] = min(risk_amount_s / sl_d, 35.0)
+                        trades_today += 1
+                        waiting[lvl], bo_dir[lvl] = False, 0
+                        entry_taken = True
+                        for k in range(n_lvl):
+                            waiting[k], bo_dir[k] = False, 0
+                else:
+                    # Short kihagyva (bull piac)
+                    if bo_dir[lvl] == -1:
+                        waiting[lvl], bo_dir[lvl] = False, 0
 
     return {
         "long_entries":  pd.Series(long_e,   index=df.index),
@@ -437,37 +535,50 @@ def generate_signals(df: pd.DataFrame) -> dict:
 def build_portfolio(df: pd.DataFrame, signals: dict, direction: str) -> vbt.Portfolio:
     """
     direction: "longonly" | "shortonly"
+
+    STRATEGY_MODE = "fixed_tp"  → fix SL + fix TP
+    STRATEGY_MODE = "trailing"  → trailing stop, nincs fix TP (nyertesek futnak)
     """
-    close    = df["Close"]
-    entries  = signals["long_entries"] if direction == "longonly" else signals["short_entries"]
-    sl_ratio = signals["sl_ratio"]
-    tp_ratio = signals["tp_ratio"]
-    size_usd = signals["size_usd"]
+    close   = df["Close"]
+    entries = signals["long_entries"] if direction == "longonly" else signals["short_entries"]
 
-    # Pozícióméret: size_usd / entry_price → darab (troy oz)
-    # VectorBT size_type="value" → USD értékben adjuk meg → elegánsabb
-    size_val = size_usd.copy()
-    size_val[~entries] = np.nan   # csak belépési bárokon aktív
+    size_val = signals["size_usd"].copy()
+    size_val[~entries] = np.nan
 
-    # sl/tp_stop: VectorBT decimális arányban várja (az entry ártól)
-    sl_s = sl_ratio.copy()
-    tp_s = tp_ratio.copy()
+    sl_s = signals["sl_ratio"].copy()
     sl_s[~entries] = np.nan
+
+    tp_s = signals["tp_ratio"].copy()
     tp_s[~entries] = np.nan
 
-    pf = vbt.Portfolio.from_signals(
-        close       = close,
-        entries     = entries,
-        exits       = pd.Series(False, index=df.index),
-        sl_stop     = sl_s,
-        tp_stop     = tp_s,
-        size        = size_val.fillna(0),
-        size_type   = "amount",         # troy oz (egység)
-        init_cash   = INIT_CASH,
-        fees        = COMMISSION / close,  # fix USD jutalék → arány formában
-        freq        = "15min",
-        direction   = direction,
+    common = dict(
+        close      = close,
+        entries    = entries,
+        exits      = pd.Series(False, index=df.index),
+        size       = size_val.fillna(0),
+        size_type  = "amount",
+        init_cash  = INIT_CASH,
+        fees       = COMMISSION / close,
+        freq       = "15min",
+        direction  = direction,
     )
+
+    if STRATEGY_MODE == "trailing":
+        # 0.5% trailing stop → 8 oz pozíció $2500-on → nagyobb dolláros nyeremény
+        # Az SL az árral együtt mozog felfelé (trailing), nincs fix TP.
+        pf = vbt.Portfolio.from_signals(
+            **common,
+            sl_stop  = TRAIL_STOP_PCT,   # 0.5% trailing distance
+            sl_trail = True,             # trailing logika aktiválva
+            tp_stop  = None,             # nincs fix TP – nyertesek futnak
+        )
+    else:  # fixed_tp
+        pf = vbt.Portfolio.from_signals(
+            **common,
+            sl_stop  = sl_s,
+            tp_stop  = tp_s,
+            sl_trail = False,
+        )
     return pf
 
 
@@ -589,14 +700,23 @@ def combined_monthly_summary(trades_long, trades_short):
 # ===========================================================================
 
 if __name__ == "__main__":
-    section("XAUUSD M15 Breakout & Retest – VectorBT Backtest v2")
+    section("XAUUSD M15 Multi-TF Breakout & Retest – VectorBT Backtest v4")
     print(f"""
+  ── HTF Trend szűrők ─────────────────────────────
+  W1 EMA periódus   : {W1_EMA_PERIOD} hét
+  H1 EMA periódus   : {H1_EMA_PERIOD} óra
+  HTF mód           : {HTF_MODE}  (strict = W1+H1 egyezés kell)
+
+  ── M15 Breakout paraméterek ─────────────────────
   Swing lookback    : {SWING_LOOKBACK} gyertya
   Max retest candle : {MAX_RETEST_CANDLES}
   Retest zóna       : ATR × {RETEST_ZONE_PCT}
   Min breakout      : ${MIN_BREAKOUT_PTS}
+
+  ── Kockázatkezelés ──────────────────────────────
   Risk:Reward       : 1:{RISK_REWARD}
   Max kockázat      : {MAX_RISK_PCT}% / trade
+  Max SL távolság   : {MAX_SL_PCT*100:.1f}% of price
   Session           : {SESSION_START}:00–{SESSION_END}:00 UTC
   Induló tőke       : ${INIT_CASH:,}
 """)
@@ -637,7 +757,6 @@ if __name__ == "__main__":
             f"{SYMBOL}_{TIMEFRAME.lower()}.csv",             # xauusd_m15.csv
         ]
         # Összes CSV a mappában, ami tartalmazza a symbol-t és a timeframe-et
-        import glob
         for pattern in [f"{SYMBOL}*{TIMEFRAME[1:]}*min*.csv",
                         f"{SYMBOL}*{TIMEFRAME}*.csv",
                         f"*{SYMBOL}*15*.csv",
