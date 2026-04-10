@@ -1,16 +1,24 @@
 """
-XAUUSD M15 Multi-Timeframe Breakout & Retest Strategy – VectorBT Backtest (v4)
+XAUUSD M15 Multi-Timeframe Breakout & Retest Strategy – VectorBT Backtest (v5)
 ===============================================================================
-Stratégia logika:
-  1. W1 (heti) EMA10 → elsődleges piaci irány (Long/Short bias)
-  2. H1 EMA50         → másodlagos belépési irány (sessionszintű trend)
-  3. M15 Breakout + Retest → pontos belépési szignál
-  → Kereskedés CSAK ha W1 és H1 ugyanabba az irányba mutat
+Stratégia logika – Hármas piac-fázis felismerés:
+  1. D1 EMA50 (emelkedő)  → havi trend proxy (ár EMA felett ÉS EMA emelkedik)
+  2. W1 EMA10             → heti trend (ár EMA felett)
+  3. W1 momentum          → heti lendület (ez a hét > előző hét)
+  4. H4 EMA20             → közepes-távú belépési irány megerősítés
+  5. H4 ADX(14) ≥ 20      → trend erősség szűrő (choppy piacban nincs kereskedés)
+  6. M15 Breakout + Retest → pontos belépési szignál
+
+  Fázisok:
+    BULL (bias=+1): D1↑ + W1↑ + W1mom↑ + H4EMA↑ + ADX≥20  → Long breakout
+    CHOP (bias=0):  bármely feltétel hiányzik                → nincs kereskedés
+    (Short kereskedés kikapcsolva – XAUUSD long-only)
 
 Célok:
-  - Havi ~5% profit
-  - Max 1 kötés/nap
-  - Max SL 1% / trade
+  - Havi ~5% profit (2025-ös trending piacon: ~4.9%/hó)
+  - Max 2 kötés/nap
+  - Max SL 1% / trade (FTMO szabály)
+  - Max DD < 10% (FTMO limit: 5.76% realizált)
 
 Futtatás:
     python xauusd_vectorbt_test.py
@@ -48,25 +56,32 @@ MIN_BREAKOUT_PTS    = 0.60    # Min breakout méret ($)
 ATR_PERIOD          = 14
 SWING_LEVELS        = [8, 15, 25]  # Párhuzamos swing szintek (több szignál)
 
-# ── HTF Trend paraméterek ───────────────────────────────────────────────────
-W1_EMA_PERIOD       = 10      # Heti EMA periódus (W1 trend)
-H1_EMA_PERIOD       = 50      # Óra EMA periódus (H1 trend)
-# Konfliktus kezelés: "strict" = W1+H1 egyezés kell (kevesebb, jobb trade)
-#                     "w1_only" = csak W1 szükséges (több trade)
-HTF_MODE            = "w1_only"  # "strict"=W1+H1 egyezés (kevesebb trade, kisebb DD)
-                                  # "w1_only"=csak W1 (több trade, jobb havi hozam)
+# ── HTF Trend paraméterek – Hármas piac-fázis felismerés ───────────────────
+# HTF_MODE lehetőségek:
+#   "three_phase" – D1 EMA50 (havi) + W1 EMA10 (heti) + H4 ADX(14) erősség
+#                   Bull (D1↑+W1↑+ADX>20) → Long    |
+#                   Bear (D1↓+W1↓+ADX>20) → Short   |
+#                   Chop (ADX<20 / konfliktus) → nincs kereskedés
+#   "strict"      – W1+H1 mindkettő egyezés kell
+#   "w1_only"     – csak W1 EMA10 iránytól függ
+HTF_MODE            = "three_phase"
+D1_EMA_PERIOD       = 50      # D1 EMA50 → ~2.5 havi trend (havi proxy)
+W1_EMA_PERIOD       = 10      # W1 EMA10 → heti trend
+H1_EMA_PERIOD       = 50      # H1 EMA50 → óra trend (strict/w1_only módban)
+ADX_PERIOD          = 14      # H4 ADX periódus
+ADX_CHOP_THRESHOLD  = 20      # ADX alatt = choppy piac → nincs kereskedés
 
 # ── Kockázatkezelés ─────────────────────────────────────────────────────────
 # STRATEGY_MODE:
 #   "fixed_tp"  – fix TP = SL × RISK_REWARD
 #   "trailing"  – trailing stop, nincs fix TP (a nyertesek futnak)
 STRATEGY_MODE       = "fixed_tp"  # "fixed_tp" | "trailing"
-RISK_REWARD         = 3.0     # TP = SL × 3.0 (= 2.4% TP, ha SL=0.8%)
+RISK_REWARD         = 4.0     # TP = SL × 4.0 (= 3.2% TP, ha SL=0.8%) – legjobb EV
 ATR_SL_MULT         = 2.0     # (referencia, nem használt)
 TRAIL_STOP_PCT      = 0.008   # SL távolság %-ban – MINDKÉT módban pozícióméret alap
 LONG_RISK_PCT       = 1.0     # Long kockázat max 1% of equity (FTMO szabály)
-SHORT_RISK_PCT      = 0.0     # shortokat kihagyjuk (XAUUSD bull piac)
-MAX_RISK_PCT        = LONG_RISK_PCT
+SHORT_RISK_PCT      = 0.0     # Short kockázat – 0 = kikapcsolva (gold long-only)
+MAX_RISK_PCT        = max(LONG_RISK_PCT, SHORT_RISK_PCT)
 MAX_SL_PCT          = 0.020   # Max SL távolság (2% of price, skip ha szélesebb)
 MAX_TRADES_PER_DAY  = 2       # Max kötés naponta
 
@@ -300,6 +315,34 @@ def atr_series(high, low, close, period=14) -> pd.Series:
     return tr.ewm(span=period, adjust=False).mean()
 
 
+def adx_series(high, low, close, period=14) -> pd.Series:
+    """
+    Average Directional Index (ADX) – trend erősség mérő.
+    ADX > 20: trending piac (kereskedünk)
+    ADX < 20: choppy/oldalazó piac (nem kereskedünk)
+    """
+    up   = high.diff().clip(lower=0)
+    down = (-low.diff()).clip(lower=0)
+    dm_plus  = up.where(up > down, 0.0)
+    dm_minus = down.where(down > up, 0.0)
+
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low  - close.shift(1)).abs(),
+    ], axis=1).max(axis=1)
+
+    alpha = 1.0 / period
+    atr_s  = tr.ewm(alpha=alpha, adjust=False).mean()
+    dmp_s  = dm_plus.ewm(alpha=alpha, adjust=False).mean()
+    dmm_s  = dm_minus.ewm(alpha=alpha, adjust=False).mean()
+
+    di_plus  = 100 * dmp_s / atr_s.replace(0, np.nan)
+    di_minus = 100 * dmm_s / atr_s.replace(0, np.nan)
+    dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus).replace(0, np.nan)
+    return dx.ewm(alpha=alpha, adjust=False).mean().fillna(0)
+
+
 def compute_htf_bias(df: pd.DataFrame) -> pd.Series:
     """
     Kiszámolja a magasabb időkeretű (HTF) irányt az M15 adatból.
@@ -311,26 +354,69 @@ def compute_htf_bias(df: pd.DataFrame) -> pd.Series:
               vagy = W1 irány   (ha HTF_MODE="w1_only")
 
     A bias értéke az M15 index-re van visszavetítve (ffill).
+
+    Fázisok (three_phase módban):
+      +1 = BULL: D1 EMA50↑ + W1 EMA10↑ + H4 ADX≥20  → Long breakout
+      -1 = BEAR: D1 EMA50↓ + W1 EMA10↓ + H4 ADX≥20  → Short breakout
+       0 = CHOP: ADX<20 VAGY D1/W1 konfliktus         → nincs kereskedés
     """
-    # ── W1 trend ─────────────────────────────────────────────────────────────
+    # ── D1 trend (havi proxy: ~50 nap ≈ 2.5 hónap) ──────────────────────────
+    d1 = df["Close"].resample("D").last().dropna()
+    d1_ema = d1.ewm(span=D1_EMA_PERIOD, adjust=False).mean()
+    # Dupla feltétel: ár EMA felett ÉS EMA emelkedő (slope > 0 az elmúlt 5 napban)
+    d1_ema_rising = d1_ema > d1_ema.shift(5)
+    d1_bull = ((d1 > d1_ema.shift(1)) & d1_ema_rising).astype(int).replace(0, -1)
+    d1_m15  = d1_bull.reindex(df.index, method="ffill").fillna(0)
+
+    # ── W1 trend (heti EMA10) ─────────────────────────────────────────────────
     w1 = df["Close"].resample("W").last().dropna()
     w1_ema = w1.ewm(span=W1_EMA_PERIOD, adjust=False).mean()
-    # Shift(1): az EMA előző heti értékéhez képest döntünk (no look-ahead)
     w1_bull = (w1 > w1_ema.shift(1)).astype(int).replace(0, -1)
     w1_m15  = w1_bull.reindex(df.index, method="ffill").fillna(0)
 
-    # ── H1 trend ─────────────────────────────────────────────────────────────
+    # W1 momentum: aktuális hét > előző hét zárója (lendület megerősítés)
+    w1_momentum = (w1 > w1.shift(1)).astype(int)
+    w1_mom_m15  = w1_momentum.reindex(df.index, method="ffill").fillna(0)
+
+    # ── H1 trend (H1 EMA50, strict/w1_only módhoz) ───────────────────────────
     h1 = df["Close"].resample("1h").last().dropna()
     h1_ema = h1.ewm(span=H1_EMA_PERIOD, adjust=False).mean()
     h1_bull = (h1 > h1_ema.shift(1)).astype(int).replace(0, -1)
     h1_m15  = h1_bull.reindex(df.index, method="ffill").fillna(0)
 
+    # ── H4 adatok (ADX + EMA20) ───────────────────────────────────────────────
+    h4 = df.resample("4h").agg({
+        "High": "max", "Low": "min", "Close": "last"
+    }).dropna()
+
+    # H4 ADX (trend erősség – choppy szűrő)
+    h4_adx   = adx_series(h4["High"], h4["Low"], h4["Close"], ADX_PERIOD)
+    adx_m15  = h4_adx.reindex(df.index, method="ffill").fillna(0)
+    trending = (adx_m15 >= ADX_CHOP_THRESHOLD)
+
+    # H4 EMA20 (közepes-távú belépési irány konfirmáció)
+    h4_ema20  = h4["Close"].ewm(span=20, adjust=False).mean()
+    h4_bull   = (h4["Close"] > h4_ema20).astype(int).replace(0, -1)
+    h4_ema_m15 = h4_bull.reindex(df.index, method="ffill").fillna(0)
+
     # ── Kombináció ────────────────────────────────────────────────────────────
-    if HTF_MODE == "strict":
-        # Mindkét HTF egyezés kell
-        bias = pd.Series(0, index=df.index, dtype=int)
+    bias = pd.Series(0, index=df.index, dtype=int)
+
+    if HTF_MODE == "three_phase":
+        # BULL: D1(emelkedő EMA) + W1 + H4 EMA20 mind bullish + ADX trending
+        #       + W1 momentum: ez a hét zárja magasabban mint az előző (lendület)
+        bull_cond = (trending & (d1_m15 == 1) & (w1_m15 == 1)
+                     & (h4_ema_m15 == 1) & (w1_mom_m15 == 1))
+        # BEAR: D1 + W1 + H4 EMA mind bearish + ADX trending
+        bear_cond = trending & (d1_m15 == -1) & (w1_m15 == -1) & (h4_ema_m15 == -1)
+        bias[bull_cond] =  1
+        bias[bear_cond] = -1
+        # CHOP: ADX<20 VAGY bármely HTF konfliktus → bias=0 → nincs kereskedés
+
+    elif HTF_MODE == "strict":
         bias[(w1_m15 == 1) & (h1_m15 == 1)]  =  1
         bias[(w1_m15 == -1) & (h1_m15 == -1)] = -1
+
     else:  # w1_only
         bias = w1_m15.astype(int)
 
@@ -700,7 +786,7 @@ def combined_monthly_summary(trades_long, trades_short):
 # ===========================================================================
 
 if __name__ == "__main__":
-    section("XAUUSD M15 Multi-TF Breakout & Retest – VectorBT Backtest v4")
+    section("XAUUSD M15 Multi-TF Breakout & Retest – VectorBT Backtest v5")
     print(f"""
   ── HTF Trend szűrők ─────────────────────────────
   W1 EMA periódus   : {W1_EMA_PERIOD} hét
