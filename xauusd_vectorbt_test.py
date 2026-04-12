@@ -96,7 +96,16 @@ FTMO_ACCOUNT_SIZE      = 10_000  # FTMO Challenge standard méret
 SESSION_START       = 7       # UTC óra
 SESSION_END         = 18
 INIT_CASH           = FTMO_ACCOUNT_SIZE
-COMMISSION          = 0.60    # USD / oz round-trip (FTMO spread ~$0.30 + commission $0.30)
+COMMISSION          = 0.60    # USD / oz round-trip (FTMO XAUUSD: spread ~$0.30 + comm ~$0.30)
+#                               Megjegyzés: FTMO XAUUSD min spread ≈ 0.2 USD, tipikus ≈ 0.35 USD
+
+# ── Backtest szűrési beállítások ─────────────────────────────────────────────
+# BACKTEST_YEAR: ha meg van adva, csak az adott év kereskedéseit elemzi.
+#   – HTF indikátorok (EMA, ADX) a TELJES adatsoron számítva (2022-tól)
+#     → megfelelő bemelegedési periódus, nincs jövőbeli szivárgás
+#   – Portfólió friss $10,000-ral indul a kiválasztott év jan. 1-jén
+#   None = teljes adatsor (2022–2025)
+BACKTEST_YEAR       = 2025    # None | 2022 | 2023 | 2024 | 2025
 
 
 # ===========================================================================
@@ -427,23 +436,36 @@ def compute_htf_bias(df: pd.DataFrame) -> pd.Series:
 # 3. SZIGNÁL GENERÁLÁS
 # ===========================================================================
 
-def generate_signals(df: pd.DataFrame) -> dict:
+def generate_signals(df: pd.DataFrame,
+                     htf_bias: pd.Series = None) -> dict:
     """
     Multi-Timeframe Breakout & Retest szignálgenerátor.
 
+    Paraméterek:
+      df        – M15 OHLCV DataFrame
+      htf_bias  – Előre kiszámított HTF bias Series (opcionális).
+                  Ha None, belsőleg kiszámítja compute_htf_bias(df)-vel.
+                  Ha megadott (pl. teljes adatsoron számítva), nincs jövőbeli szivárgás.
+
     Belépési logika:
-      1. HTF bias meghatározása (W1 + H1)
+      1. HTF bias (D1 EMA50 + W1 EMA10 + W1 mom + H4 EMA20 + H4 ADX ≥ 20)
       2. M15 breakout az HTF irányában
       3. Retest konfirmáció bullish/bearish gyertyával
-      4. SL/TP számítás ATR alapon
+      4. SL/TP számítás TRAIL_STOP_PCT × RISK_REWARD alapon
 
     Visszatér:
       long_entries, short_entries  (bool Series)
       sl_ratio, tp_ratio           (float Series – arány entry price-hoz)
       size_usd                     (float Series – oz darabszám)
     """
-    print("  HTF bias számítása (W1 + H1)...")
-    htf_bias = compute_htf_bias(df)
+    if htf_bias is None:
+        print("  HTF bias számítása (helyi adatsoron)...")
+        htf_bias = compute_htf_bias(df)
+    else:
+        print("  HTF bias: előre számított (teljes adatsor → nincs jövőszivárgás)")
+
+    # Igazítsuk a bias-t a df indexéhez (BACKTEST_YEAR esetén lehet eltérés)
+    htf_bias = htf_bias.reindex(df.index, method="ffill").fillna(0).astype(int)
 
     # Statisztika
     long_bias_pct  = (htf_bias == 1).mean()  * 100
@@ -683,23 +705,35 @@ def print_portfolio_stats(pf: vbt.Portfolio, name: str):
     stats = pf.stats()
     trades = pf.trades.records_readable
 
-    init_v  = pf.init_cash
-    final_v = pf.final_value()
-    ret_pct = (final_v / init_v - 1) * 100
+    init_v    = pf.init_cash
+    final_v   = pf.final_value()
+    ret_pct   = (final_v / init_v - 1) * 100
+    total_fees = float(stats.get("Total Fees Paid", 0))
+    n_closed   = int(stats.get("Total Closed Trades", len(trades)))
+    fee_per_t  = total_fees / n_closed if n_closed > 0 else 0
+
+    dd_pct    = float(stats.get("Max Drawdown [%]", 0))
+    ftmo_ok   = dd_pct <= 10.0
 
     print(f"  Induló tőke        : ${init_v:>10,.2f}")
     print(f"  Végső tőke         : ${final_v:>10,.2f}")
     print(f"  Összes hozam       : {ret_pct:>+9.2f}%")
-    print(f"  Max Drawdown       : {stats.get('Max Drawdown [%]', 'N/A')}")
+    print(f"  Max Drawdown       : {dd_pct:>8.2f}%  {'✓ FTMO OK' if ftmo_ok else '✗ FTMO LIMIT!'}")
     print(f"  Sharpe Ratio       : {stats.get('Sharpe Ratio', 'N/A')}")
     print(f"  Sortino Ratio      : {stats.get('Sortino Ratio', 'N/A')}")
+    print(f"  Calmar Ratio       : {stats.get('Calmar Ratio', 'N/A')}")
     print(f"  Win Rate           : {stats.get('Win Rate [%]', 'N/A')}")
     print(f"  Kötések (összes)   : {stats.get('Total Trades', len(trades))}")
-    print(f"  Lezárt kötések     : {stats.get('Total Closed Trades', 'N/A')}")
+    print(f"  Lezárt kötések     : {n_closed}")
     print(f"  Legjobb trade      : {stats.get('Best Trade [%]', 'N/A')}")
     print(f"  Legrosszabb trade  : {stats.get('Worst Trade [%]', 'N/A')}")
     print(f"  Profit Factor      : {stats.get('Profit Factor', 'N/A')}")
     print(f"  Expectancy         : {stats.get('Expectancy', 'N/A')}")
+    print(f"  ── FTMO Jutalék ─────────────────────────────────────")
+    print(f"  Kif. jutalék össz. : ${total_fees:>10,.2f}  ({total_fees/init_v*100:.2f}% of account)")
+    print(f"  Jutalék / trade    : ${fee_per_t:>10,.2f}")
+    print(f"  Jutalék / oz       : ${COMMISSION:.2f}  (FTMO XAUUSD round-trip)")
+    print(f"  Hozam (díj nélkül) : {(final_v + total_fees)/init_v*100 - 100:>+9.2f}%  (gross)")
     return trades
 
 
@@ -875,46 +909,106 @@ if __name__ == "__main__":
         print(f"  ✓ Szintetikus: {len(df):,} gyertya")
 
     avg_atr = atr_series(df["High"], df["Low"], df["Close"], ATR_PERIOD).mean()
-    print(f"\nBetöltve  : {len(df):,} gyertya")
+    print(f"\nBetöltve  : {len(df):,} gyertya  (teljes adatsor – indikátor warmup)")
     print(f"Időszak   : {df.index[0]} → {df.index[-1]}")
     print(f"Ár tartom.: ${df['Close'].min():.2f} – ${df['Close'].max():.2f}")
     print(f"Átlag ATR : ${avg_atr:.2f}")
 
-    # ── Szignálok generálása ─────────────────────────────────────────────────
-    print("\nSzignálok generálása...")
-    signals = generate_signals(df)
-    n_long  = signals["long_entries"].sum()
-    n_short = signals["short_entries"].sum()
-    print(f"  Long belépők  : {n_long}")
-    print(f"  Short belépők : {n_short}")
-    print(f"  Összes        : {n_long + n_short}")
+    # ── HTF bias számítása a TELJES adatsoron (kauzális, nincs jövőszivárgás) ─
+    section("HTF BIAS SZÁMÍTÁS – Teljes adatsoron (look-ahead FREE)")
+    print("""
+  A HTF indikátorok (D1 EMA50, W1 EMA10, H4 ADX, H4 EMA20) a TELJES
+  2022–2025 adatsoron kerülnek kiszámításra, de minden bar csak a
+  SAJÁT MÚLTBELI adatait használja (EWM adjust=False, ffill reindex).
+  → Nincs jövőbeli szivárgás (no look-ahead bias).
+""")
+    htf_bias_full = compute_htf_bias(df)
+
+    # ── Adatszűrés BACKTEST_YEAR-re (ha be van állítva) ───────────────────────
+    if BACKTEST_YEAR is not None:
+        section(f"BACKTEST SZŰRÉS: CSAK {BACKTEST_YEAR}")
+        print(f"""
+  Indikátorok : 2022-tól számítva (megfelelő warmup) → nincs look-ahead
+  Portfólió   : Friss ${INIT_CASH:,} indul {BACKTEST_YEAR} jan. 1-jén
+  FTMO költség: ${COMMISSION:.2f} USD/oz round-trip (spread + jutalék)
+""")
+        # Warmup: 30 bar × 15 perc = 7.5 óra swing high/low számításhoz
+        warmup_start = pd.Timestamp(f"{BACKTEST_YEAR}-01-01") - pd.Timedelta(hours=8)
+        df_warmup    = df[df.index >= warmup_start].copy()
+        bias_warmup  = htf_bias_full.reindex(df_warmup.index, method="ffill").fillna(0)
+
+        print(f"  Szignálok generálása ({BACKTEST_YEAR}, warmup: {warmup_start.date()} 00:00-tól)...")
+        signals_warmup = generate_signals(df_warmup, htf_bias=bias_warmup)
+
+        # Szűrés: csak a BACKTEST_YEAR-es kereskedések a portfólióba
+        year_mask   = df_warmup.index.year == BACKTEST_YEAR
+        df_bt       = df_warmup[year_mask].copy()
+        signals_bt  = {k: v[year_mask] for k, v in signals_warmup.items()}
+    else:
+        print("\nSzignálok generálása (teljes adatsor)...")
+        signals_bt = generate_signals(df, htf_bias=htf_bias_full)
+        df_bt      = df
+
+    n_long  = signals_bt["long_entries"].sum()
+    n_short = signals_bt["short_entries"].sum()
+    yr_lbl  = str(BACKTEST_YEAR) if BACKTEST_YEAR else "TELJES"
+    print(f"\n  [{yr_lbl}] Long belépők  : {n_long}")
+    print(f"  [{yr_lbl}] Short belépők : {n_short}")
+    print(f"  [{yr_lbl}] Összes        : {n_long + n_short}")
 
     if (n_long + n_short) == 0:
-        print("\nHIBA: Nincs egyetlen szignál sem!")
+        print("\nHIBA: Nincs egyetlen szignál sem a kiválasztott időszakban!")
         print("Próbálj kisebb MIN_BREAKOUT_PTS vagy nagyobb RETEST_ZONE_PCT értékkel.")
         exit(1)
 
     # ── Portfóliók építése ───────────────────────────────────────────────────
-    pf_long  = build_portfolio(df, signals, "longonly")  if n_long  > 0 else None
-    pf_short = build_portfolio(df, signals, "shortonly") if n_short > 0 else None
+    pf_long  = build_portfolio(df_bt, signals_bt, "longonly")  if n_long  > 0 else None
+    pf_short = build_portfolio(df_bt, signals_bt, "shortonly") if n_short > 0 else None
 
     # ── Statisztikák ─────────────────────────────────────────────────────────
-    t_long  = print_portfolio_stats(pf_long,  "LONG PORTFÓLIÓ")  if pf_long  else None
-    t_short = print_portfolio_stats(pf_short, "SHORT PORTFÓLIÓ") if pf_short else None
+    t_long  = print_portfolio_stats(pf_long,  f"LONG PORTFÓLIÓ – {yr_lbl}")  if pf_long  else None
+    t_short = print_portfolio_stats(pf_short, f"SHORT PORTFÓLIÓ – {yr_lbl}") if pf_short else None
 
     # ── Havi bontás ──────────────────────────────────────────────────────────
     print_monthly_breakdown(t_long,  "Long")
     print_monthly_breakdown(t_short, "Short")
     combined_monthly_summary(t_long, t_short)
 
-    # ── VectorBT full stats ──────────────────────────────────────────────────
-    section("VECTORBT RÉSZLETES STATS – LONG")
+    # ── VectorBT teljes stats ────────────────────────────────────────────────
+    section(f"VECTORBT RÉSZLETES STATS – LONG ({yr_lbl})")
     if pf_long:
         print(pf_long.stats().to_string())
 
-    section("VECTORBT RÉSZLETES STATS – SHORT")
+    section(f"VECTORBT RÉSZLETES STATS – SHORT ({yr_lbl})")
     if pf_short:
         print(pf_short.stats().to_string())
+
+    # ── FTMO Compliance összefoglaló ─────────────────────────────────────────
+    section(f"FTMO COMPLIANCE ÖSSZEFOGLALÓ – {yr_lbl}")
+    if pf_long:
+        st      = pf_long.stats()
+        dd      = float(st.get("Max Drawdown [%]", 0))
+        fees    = float(st.get("Total Fees Paid", 0))
+        ret     = (pf_long.final_value() / pf_long.init_cash - 1) * 100
+        n_tr    = int(st.get("Total Closed Trades", 0))
+        print(f"""
+  ── Számla adatok ───────────────────────────────────────
+  Induló tőke         : ${INIT_CASH:,}
+  Végső érték         : ${pf_long.final_value():,.2f}
+  Nettó hozam         : {ret:+.2f}%  (FTMO jutalék levonva)
+  Bruttó hozam        : {(pf_long.final_value()+fees)/INIT_CASH*100-100:+.2f}%  (jutalék nélkül)
+
+  ── FTMO Limitek ────────────────────────────────────────
+  Max Drawdown        : {dd:.2f}%  {'✓ (limit: 10%)' if dd <= 10 else '✗ LIMIT TÚLLÉPVE!'}
+  Napi veszteség limit: {FTMO_DAILY_LOSS_LIMIT*100:.1f}%  (kód-szintű védelemmel)
+  FTMO max DD limit   : 10.0%
+
+  ── Jutalék részletezés ─────────────────────────────────
+  Jutalék (round-trip): ${COMMISSION:.2f} / oz  (FTMO XAUUSD)
+  Összes kifizetett   : ${fees:,.2f}  ({fees/INIT_CASH*100:.2f}% of account)
+  Jutalék / trade     : ${fees/n_tr:.2f}  (átlag, {n_tr} lezárt trade)
+  Havi jutalék átlag  : ${fees/max(len(pd.period_range(df_bt.index[0], df_bt.index[-1], freq='M')),1):.2f}
+""")
 
     print("\n[KÉSZ] Backtest befejezve.")
     print("       Valós MT5 adathoz: másold a XAUUSD_M15.csv-t ebbe a mappába.")
