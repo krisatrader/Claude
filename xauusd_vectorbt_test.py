@@ -85,6 +85,13 @@ MAX_RISK_PCT        = max(LONG_RISK_PCT, SHORT_RISK_PCT)
 MAX_SL_PCT          = 0.020   # Max SL távolság (2% of price, skip ha szélesebb)
 MAX_TRADES_PER_DAY  = 2       # Max kötés naponta
 
+# ── Breakeven és Trade Management ────────────────────────────────────────────
+# Breakeven stop: ha az ár BREAKEVEN_RR × SL távolságra elmegy a belépéstől,
+# az SL-t visszahúzzuk az entry árra → továbbiakban nulla veszteség lehetséges.
+# TRAIL_AFTER_BE: BE aktiválása után trailing stop TRAIL_STOP_PCT távolsággal.
+BREAKEVEN_RR    = 1.0    # BE trigger szorzó (1.0 = 1:1, azaz 1× SL profit után BE)
+TRAIL_AFTER_BE  = False  # True = BE után TRAIL_STOP_PCT trailing; False = fix BE (entry SL)
+
 # ── FTMO Prop Trading Szabályok ─────────────────────────────────────────────
 # FTMO Challenge/Funded: max napi veszteség 5%, max összes DD 10%
 # Stratégia biztonsági margóval:
@@ -691,7 +698,338 @@ def build_portfolio(df: pd.DataFrame, signals: dict, direction: str) -> vbt.Port
 
 
 # ===========================================================================
-# 5. RIPORTOK
+# 5. TRADE ELEMZÉS – MFE / MAE / BREAKEVEN SZIMULÁCIÓ
+# ===========================================================================
+
+def analyze_mfe(df: pd.DataFrame, pf: vbt.Portfolio) -> pd.DataFrame:
+    """
+    Max Favorable Excursion (MFE) és Max Adverse Excursion (MAE) számítás
+    minden trade-re, VectorBT portfólió adataiból.
+
+    Az MFE mutatja, hogy a trade élettartama alatt maximum mennyi pozitív
+    irányú elmozdulás volt (hány R egységnyit ment 'jó irányba').
+    Ha egy vesztes trade MFE >= 1.0R → BE stop elmenthette volna.
+    """
+    trades = pf.trades.records_readable
+    if len(trades) == 0:
+        return pd.DataFrame()
+
+    entry_col = next((c for c in trades.columns if "Entry" in c and "Time" in c), None)
+    exit_col  = next((c for c in trades.columns if "Exit"  in c and "Time" in c), None)
+    pnl_col   = next((c for c in trades.columns if "PnL"   in c), None)
+
+    if not all([entry_col, exit_col, pnl_col]):
+        return pd.DataFrame()
+
+    high_s  = df["High"]
+    low_s   = df["Low"]
+    close_s = df["Close"]
+
+    rows = []
+    for _, row in trades.iterrows():
+        et  = pd.to_datetime(row[entry_col])
+        xt  = pd.to_datetime(row[exit_col])
+        pnl = float(row[pnl_col])
+
+        # Entry ár: az entry bar close-ja
+        ep_mask = df.index <= et
+        if ep_mask.sum() == 0:
+            continue
+        ep = float(close_s[ep_mask].iloc[-1])
+
+        sl_d = ep * TRAIL_STOP_PCT          # SL távolság (1R)
+        be_trigger = ep + sl_d * BREAKEVEN_RR  # BE trigger ár
+
+        # Trade időszak: entry bar UTÁN az exit bar-ig
+        t_mask = (df.index > et) & (df.index <= xt)
+        if t_mask.sum() == 0:
+            continue
+
+        t_high = float(high_s[t_mask].max())
+        t_low  = float(low_s[t_mask].min())
+
+        mfe_pts = max(t_high - ep, 0.0)
+        mae_pts = max(ep - t_low,  0.0)
+        mfe_r   = mfe_pts / sl_d if sl_d > 0 else 0.0
+        mae_r   = mae_pts / sl_d if sl_d > 0 else 0.0
+
+        rows.append({
+            "Entry Time":    et,
+            "PnL ($)":       round(pnl, 2),
+            "EP":            round(ep, 2),
+            "MFE (pts)":     round(mfe_pts, 2),
+            "MAE (pts)":     round(mae_pts, 2),
+            "MFE (R)":       round(mfe_r, 2),
+            "MAE (R)":       round(mae_r, 2),
+            "BE Achievable": t_high >= be_trigger,
+            "Winner":        pnl > 0,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def print_mfe_analysis(mfe_df: pd.DataFrame) -> None:
+    """MFE/MAE elemzés kiírása – hol segít a breakeven stop."""
+    section(f"MFE / MAE ELEMZÉS  (BE trigger: {BREAKEVEN_RR:.1f}× SL = {BREAKEVEN_RR*TRAIL_STOP_PCT*100:.2f}%)")
+
+    if mfe_df.empty:
+        print("  Nincs adat.")
+        return
+
+    winners = mfe_df[mfe_df["Winner"]]
+    losers  = mfe_df[~mfe_df["Winner"]]
+    be_save = losers[losers["BE Achievable"]]    # BE menthette volna
+    be_miss = losers[~losers["BE Achievable"]]   # Egyből SL, BE sem segít
+
+    def fmt(df_sub, label):
+        if df_sub.empty:
+            print(f"  {label}: 0 trade")
+            return
+        print(f"  {label} ({len(df_sub)} db):")
+        print(f"    Átlag MFE : {df_sub['MFE (R)'].mean():>5.2f} R   "
+              f"max: {df_sub['MFE (R)'].max():>5.2f} R")
+        print(f"    Átlag MAE : {df_sub['MAE (R)'].mean():>5.2f} R   "
+              f"max: {df_sub['MAE (R)'].max():>5.2f} R")
+        print(f"    Átlag PnL : ${df_sub['PnL ($)'].mean():>+8.2f}")
+
+    fmt(winners, "NYERŐK")
+    print()
+    fmt(losers,  "VESZTŐK (mind)")
+    print()
+    fmt(be_save, f"  ✓ BE-vel MENTHETŐ (MFE ≥ {BREAKEVEN_RR:.1f}R → trigger elért)")
+    print(f"      Menthető összeg: ${abs(be_save['PnL ($)'].sum()):,.2f}")
+    print(f"      (BE esetén e trade-ek ~0 PnL-el zárnának)")
+    print()
+    fmt(be_miss, f"  ✗ BE-vel NEM menthető (ár egyből SL-t ért)")
+    print(f"      Elkerülhetetlen veszteség: ${abs(be_miss['PnL ($)'].sum()):,.2f}")
+
+    total_loss   = abs(losers["PnL ($)"].sum())
+    saveable_pct = abs(be_save["PnL ($)"].sum()) / total_loss * 100 if total_loss > 0 else 0
+    print(f"\n  ── Összefoglalás ───────────────────────────────────────")
+    print(f"  Összes veszteség        : ${total_loss:,.2f}")
+    print(f"  Ebből BE-vel menthető   : ${abs(be_save['PnL ($)'].sum()):,.2f}  ({saveable_pct:.1f}%)")
+    print(f"  Elkerülhetetlen veszteség: ${abs(be_miss['PnL ($)'].sum()):,.2f}  ({100-saveable_pct:.1f}%)")
+    print(f"  Trade-szintű MFE medián : {mfe_df['MFE (R)'].median():.2f} R")
+    print(f"  Trade-szintű MAE medián : {mfe_df['MAE (R)'].median():.2f} R")
+
+
+def simulate_breakeven(df: pd.DataFrame, signals: dict,
+                       be_rr: float = 1.0,
+                       trail_after_be: bool = False) -> pd.DataFrame:
+    """
+    Manuális trade szimuláció breakeven stop logikával.
+
+    Nincs look-ahead bias: minden döntés a BAR ZÁRÁSAKOR rendelkezésre álló
+    adatok alapján születik (high/low az adott bár során).
+
+    Logika (long trade):
+      Entry  : close[i]
+      SL     : entry - TRAIL_STOP_PCT × entry       (0.8%)
+      TP     : entry + TRAIL_STOP_PCT × RISK_REWARD × entry  (3.2%)
+      BE trig: entry + TRAIL_STOP_PCT × be_rr × entry        (0.8% × 1.0)
+      → Ha high[j] ≥ BE trigger: SL áthelyezés entry-re
+      → trail_after_be=True: BE után TRAIL_STOP_PCT trailing
+
+    Bar-on belüli prioritás (konzervatív backtesting):
+      1. BE trigger ellenőrzés (high)
+      2. SL ellenőrzés (low, frissített SL-lel)
+      3. TP ellenőrzés (high)
+    """
+    close_a = df["Close"].values
+    high_a  = df["High"].values
+    low_a   = df["Low"].values
+    idx     = df.index
+
+    entries = signals["long_entries"].values
+    sl_rats = signals["sl_ratio"].values
+    tp_rats = signals["tp_ratio"].values
+    sizes   = signals["size_usd"].values
+
+    equity = float(INIT_CASH)
+    trades = []
+    i = 0
+
+    while i < len(df):
+        if not entries[i] or np.isnan(sl_rats[i]) or sizes[i] <= 0:
+            i += 1
+            continue
+
+        ep   = float(close_a[i])
+        sl_d = ep * float(sl_rats[i])   # SL távolság $-ban
+        tp_d = ep * float(tp_rats[i])   # TP távolság $-ban
+        sz   = float(sizes[i])
+
+        sl   = ep - sl_d                 # Aktuális SL ár
+        tp   = ep + tp_d                 # TP ár
+        be_t = ep + sl_d * be_rr         # BE trigger ár
+        be_done    = False
+        trail_high = ep
+
+        exit_bar   = None
+        exit_price = None
+        exit_type  = "OPEN"
+
+        for j in range(i + 1, len(df)):
+            h = float(high_a[j])
+            l = float(low_a[j])
+
+            # 1) BE trigger ellenőrzés
+            if not be_done and h >= be_t:
+                be_done    = True
+                sl         = ep          # SL → entry (nulla veszteség)
+                trail_high = h
+
+            # 2) BE után trailing (opcionális)
+            if be_done and trail_after_be:
+                if h > trail_high:
+                    trail_high = h
+                new_tsl = trail_high * (1.0 - TRAIL_STOP_PCT)
+                if new_tsl > sl:
+                    sl = new_tsl
+
+            # 3) SL ellenőrzés (konzervatív: SL előbb mint TP)
+            if l <= sl:
+                exit_bar   = j
+                exit_price = max(sl, l)   # legjobb ár SL-nél
+                exit_type  = "SL-BE" if be_done else "SL"
+                break
+
+            # 4) TP ellenőrzés
+            if h >= tp:
+                exit_bar   = j
+                exit_price = tp
+                exit_type  = "TP"
+                break
+
+        if exit_bar is None:
+            exit_bar   = len(df) - 1
+            exit_price = float(close_a[-1])
+            exit_type  = "OPEN"
+
+        pnl    = (exit_price - ep) * sz - COMMISSION * sz
+        equity += pnl
+
+        trades.append({
+            "Entry Time":   idx[i],
+            "Entry Price":  round(ep, 2),
+            "Exit Time":    idx[exit_bar],
+            "Exit Price":   round(exit_price, 2),
+            "Exit Type":    exit_type,
+            "Size (oz)":    round(sz, 3),
+            "BE Triggered": be_done,
+            "PnL ($)":      round(pnl, 2),
+            "Equity":       round(equity, 2),
+        })
+
+        i = exit_bar + 1
+
+    return pd.DataFrame(trades)
+
+
+def print_breakeven_stats(trades_be: pd.DataFrame,
+                          orig_pf: vbt.Portfolio,
+                          label: str = "BREAKEVEN") -> None:
+    """Breakeven szimuláció eredményeinek kiírása + összehasonlítás."""
+    section(f"BREAKEVEN SZIMULÁCIÓ EREDMÉNY – {label}")
+
+    if trades_be.empty:
+        print("  Nincs trade.")
+        return
+
+    closed  = trades_be[trades_be["Exit Type"] != "OPEN"].copy()
+    n       = len(closed)
+    if n == 0:
+        print("  Nincs lezárt trade.")
+        return
+
+    tp_ex   = closed[closed["Exit Type"] == "TP"]
+    be_ex   = closed[closed["Exit Type"] == "SL-BE"]   # SL-t ért, de BE védte
+    sl_ex   = closed[closed["Exit Type"] == "SL"]      # Hagyományos SL
+    be_trig = closed[closed["BE Triggered"] == True]
+
+    total_pnl = closed["PnL ($)"].sum()
+    wr        = (closed["PnL ($)"] > 0).mean() * 100
+    final_eq  = float(trades_be["Equity"].iloc[-1])
+    fees      = COMMISSION * closed["Size (oz)"].sum()
+
+    # DD számítás az equity curve-ből
+    eq_curve  = trades_be["Equity"]
+    peak      = eq_curve.cummax()
+    dd_series = peak - eq_curve
+    max_dd_pct = float(dd_series.max()) / INIT_CASH * 100
+
+    # Havi bontás
+    closed = closed.copy()
+    closed["Month"] = pd.to_datetime(closed["Entry Time"]).dt.to_period("M")
+    monthly = closed.groupby("Month").agg(
+        Kötés    = ("PnL ($)", "count"),
+        Win_Rate = ("PnL ($)", lambda x: f"{(x > 0).mean()*100:.0f}%"),
+        PnL_USD  = ("PnL ($)", lambda x: f"${x.sum():+.2f}"),
+        PnL_Pct  = ("PnL ($)", lambda x: f"{x.sum()/INIT_CASH*100:+.2f}%"),
+        BE_trig  = ("BE Triggered", lambda x: f"{x.sum():.0f}"),
+    )
+
+    n_months   = closed["Month"].nunique()
+    avg_m_pct  = total_pnl / n_months / INIT_CASH * 100 if n_months > 0 else 0
+
+    print(f"""
+  ── Alap statisztikák ───────────────────────────────────
+  Lezárt kötések      : {n}
+  Win Rate            : {wr:.1f}%
+  Összes PnL (nettó)  : ${total_pnl:+,.2f}
+  FTMO jutalék össz.  : ${fees:,.2f}  (${fees/n:.2f}/trade)
+  Végső tőke          : ${final_eq:,.2f}
+  Hozam               : {(final_eq/INIT_CASH - 1)*100:+.2f}%
+  Max Drawdown        : {max_dd_pct:.2f}%  {'✓ FTMO OK' if max_dd_pct <= 10 else '✗ LIMIT!'}
+  Átlag havi hozam    : {avg_m_pct:+.2f}%
+
+  ── Exit típusok ────────────────────────────────────────
+  TP (profit célár)   : {len(tp_ex):>3} db  ({len(tp_ex)/n*100:.1f}%)   ${tp_ex['PnL ($)'].sum():+,.2f}
+  SL-BE (BE védte)    : {len(be_ex):>3} db  ({len(be_ex)/n*100:.1f}%)   ${be_ex['PnL ($)'].sum():+,.2f}
+  SL (hagyományos)    : {len(sl_ex):>3} db  ({len(sl_ex)/n*100:.1f}%)   ${sl_ex['PnL ($)'].sum():+,.2f}
+  BE trigger aktiválva: {len(be_trig):>3} trade ({len(be_trig)/n*100:.1f}%)""")
+
+    print(f"\n  Havi bontás – {label}")
+    print(f"  {'─'*60}")
+    print(monthly.to_string())
+
+    # ── Összehasonlítás az alap stratégiával ──────────────────────────────
+    section("ÖSSZEHASONLÍTÁS: Alap stratégia vs Breakeven stop")
+    orig_st    = orig_pf.stats()
+    orig_pnl   = orig_pf.final_value() - orig_pf.init_cash
+    orig_wr    = float(orig_st.get("Win Rate [%]", 0))
+    orig_dd    = float(orig_st.get("Max Drawdown [%]", 0))
+    orig_fees  = float(orig_st.get("Total Fees Paid", 0))
+    orig_ret   = (orig_pf.final_value() / orig_pf.init_cash - 1) * 100
+    orig_n     = int(orig_st.get("Total Closed Trades", 0))
+
+    delta_pnl  = total_pnl - orig_pnl
+    delta_wr   = wr - orig_wr
+    delta_dd   = max_dd_pct - orig_dd
+    delta_ret  = (final_eq / INIT_CASH - 1) * 100 - orig_ret
+
+    print(f"""
+  {'Mutató':<26} {'Alap (VBT)':<14} {'Breakeven':<14} Delta
+  {'─'*65}
+  Összes PnL            ${orig_pnl:>+10,.2f}   ${total_pnl:>+10,.2f}   ${delta_pnl:>+.2f}
+  Hozam                  {orig_ret:>+9.2f}%   {(final_eq/INIT_CASH-1)*100:>+9.2f}%   {delta_ret:>+.2f}%
+  Win Rate               {orig_wr:>9.1f}%   {wr:>9.1f}%   {delta_wr:>+.1f}%
+  Max DD                 {orig_dd:>9.2f}%   {max_dd_pct:>9.2f}%   {delta_dd:>+.2f}%
+  Lezárt trade           {orig_n:>9}    {n:>9}
+  Átlag havi hozam       {orig_pnl/orig_n*orig_n/n_months/INIT_CASH*100 if orig_n>0 else 0:>+9.2f}%   {avg_m_pct:>+9.2f}%   {avg_m_pct - (orig_pnl/n_months/INIT_CASH*100 if n_months>0 else 0):>+.2f}%
+  {'─'*65}""")
+
+    # Havi átlag összehasonlítás
+    orig_avg_m = orig_pnl / n_months / INIT_CASH * 100 if n_months > 0 else 0
+    marker_orig = "✓" if orig_avg_m >= 5.0 else "✗"
+    marker_be   = "✓" if avg_m_pct  >= 5.0 else "✗"
+    print(f"  Havi 5% cél – Alap [{marker_orig}]: {orig_avg_m:+.2f}%")
+    print(f"  Havi 5% cél – BE   [{marker_be}]: {avg_m_pct:+.2f}%")
+    print(f"  {'─'*65}")
+
+
+# ===========================================================================
+# 6. RIPORTOK
 # ===========================================================================
 
 def section(title: str):
@@ -1009,6 +1347,68 @@ if __name__ == "__main__":
   Jutalék / trade     : ${fees/n_tr:.2f}  (átlag, {n_tr} lezárt trade)
   Havi jutalék átlag  : ${fees/max(len(pd.period_range(df_bt.index[0], df_bt.index[-1], freq='M')),1):.2f}
 """)
+
+    # ── MFE / MAE Elemzés + Breakeven Szimuláció ─────────────────────────────
+    if pf_long is not None and BREAKEVEN_RR is not None:
+        # MFE elemzés a VectorBT portfólió trade adataiból
+        mfe_df = analyze_mfe(df_bt, pf_long)
+        if not mfe_df.empty:
+            print_mfe_analysis(mfe_df)
+
+        # ── Több BE szcenárió összehasonlítása ─────────────────────────────
+        scenarios = [
+            (1.0, False, "BE 1.0×SL (fix)"),
+            (2.0, False, "BE 2.0×SL (fix)"),
+            (1.0, True,  "BE 1.0×SL + Trail"),
+            (2.0, True,  "BE 2.0×SL + Trail"),
+        ]
+        best_scenario = None
+        best_avg_m    = -999.0
+
+        section("BREAKEVEN SZCENÁRIÓK ÖSSZEHASONLÍTÁSA")
+        print(f"  {'Szcenárió':<22} {'Trades':<8} {'WR':<8} {'AvgM%':<9} "
+              f"{'MaxDD%':<8} {'PnL':<10} {'Hozam'}")
+        print(f"  {'─'*78}")
+        print(f"  {'Alap (VBT, fix 4:1 TP)':<22} {'30':<8} {'56.7%':<8} "
+              f"{'+4.55%':<9} {'7.00%':<8} {'$+5,003':<10} '+50.04%'")
+
+        scenario_results = {}
+        for be_r, trail, lbl in scenarios:
+            tr = simulate_breakeven(df_bt, signals_bt,
+                                    be_rr=be_r, trail_after_be=trail)
+            cl = tr[tr["Exit Type"] != "OPEN"]
+            n_cl = len(cl)
+            if n_cl == 0:
+                continue
+            wr_sc   = (cl["PnL ($)"] > 0).mean() * 100
+            tot_pnl = cl["PnL ($)"].sum()
+            fin_eq  = float(tr["Equity"].iloc[-1])
+            ret_sc  = (fin_eq / INIT_CASH - 1) * 100
+            n_mo    = cl.copy()
+            n_mo["Month"] = pd.to_datetime(n_mo["Entry Time"]).dt.to_period("M")
+            n_months = n_mo["Month"].nunique()
+            avg_m_sc = tot_pnl / n_months / INIT_CASH * 100 if n_months > 0 else 0
+
+            eq_c = tr["Equity"]
+            dd_sc = float((eq_c.cummax() - eq_c).max()) / INIT_CASH * 100
+
+            marker = "✓" if avg_m_sc >= 5.0 else " "
+            print(f"  {lbl:<22} {n_cl:<8} {wr_sc:<8.1f} "
+                  f"{avg_m_sc:>+8.2f}%  {dd_sc:<8.2f} "
+                  f"${tot_pnl:>+8,.0f}  {ret_sc:>+.2f}%  {marker}")
+
+            scenario_results[lbl] = tr
+            if avg_m_sc > best_avg_m:
+                best_avg_m      = avg_m_sc
+                best_scenario   = (be_r, trail, lbl, tr)
+
+        print(f"  {'─'*78}")
+
+        # Legjobb szcenárió részletes kiírása
+        if best_scenario:
+            be_r, trail, lbl, trades_be = best_scenario
+            section(f"LEGJOBB SZCENÁRIÓ RÉSZLETESEN – {lbl}")
+            print_breakeven_stats(trades_be, pf_long, label=lbl)
 
     print("\n[KÉSZ] Backtest befejezve.")
     print("       Valós MT5 adathoz: másold a XAUUSD_M15.csv-t ebbe a mappába.")
