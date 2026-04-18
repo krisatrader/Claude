@@ -4,6 +4,16 @@
 //  Platform  : cTrader / cAlgo (.NET)
 // ============================================================================
 //
+//  VERZIÓTÖRTÉNET
+//  ────────────────────────────────────────────────────────────────────────
+//  v1.0 (2026-04-18) – Aktív stratégia első változata: 3-rétegű HTF szűrő,
+//                      6 swing szint, max 2 párhuzamos pozíció, RR=3:1.
+//  v1.1 (2026-04-18) – CS0115 fix: Positions.Closed esemény feliratkozás a
+//                      nem felülírható OnPositionClosed metódus helyett.
+//  v1.2 (2026-04-18) – CS0618 fix: ModifyPosition új API használata
+//                      ProtectionType.Absolute paraméterrel (jövőbiztos).
+// ────────────────────────────────────────────────────────────────────────
+//
 //  Backtest 2025 ($10,000 számla, 1% kockázat/kötés, $0.60/oz FTMO jutalék):
 //    110 kötés  |  10.0/hó  |  56.4% WR  |  +83.57% total  |  +7.60%/hó avg
 //    Max DD: 4.74%  (FTMO 9% limit alatt)
