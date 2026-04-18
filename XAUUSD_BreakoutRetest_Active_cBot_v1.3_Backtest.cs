@@ -100,9 +100,8 @@ namespace cAlgo.Robots
         private int[]        _swingLevels;
         private SwingState[] _states;
 
-        // H4 EMA计算 (从 M15 resampled)
-        private ExponentialMovingAverage _h4Ema;
-        private DataSeries               _h4Close;
+        // H4 EMA számítás (M15-ből resampling-olva – backtest kompatibilis)
+        private ExponentialMovingAverage _m15Ema20;  // M15 EMA20 helyettesítésként H4 EMA20 helyett
 
         // BE tracking per position
         private Dictionary<long, bool> _beTriggered = new Dictionary<long, bool>();
@@ -127,11 +126,10 @@ namespace cAlgo.Robots
             _states = new SwingState[6];
             for (int i = 0; i < 6; i++) _states[i] = new SwingState();
 
-            // H4 EMA from M15 resampling
+            // M15 EMA20 (H4 helyettesítésként backtest-ben)
             if (UseHtfFilter)
             {
-                _h4Close = CreateDataSeries();
-                _h4Ema = Indicators.ExponentialMovingAverage(_h4Close, H4EmaPeriod);
+                _m15Ema20 = Indicators.ExponentialMovingAverage(Bars.ClosePrices, H4EmaPeriod);
             }
 
             _peakBalance     = Account.Balance;
@@ -324,37 +322,14 @@ namespace cAlgo.Robots
         {
             if (!UseHtfFilter) return true;  // No filter = always bullish
 
-            if (_h4Ema == null || _h4Close.Count < H4EmaPeriod + 5)
+            if (_m15Ema20 == null || Bars.Count < H4EmaPeriod + 5)
                 return false;
 
-            // H4 close > H4 EMA20
-            double h4CloseNow = _h4Close.Last(0);
-            double h4EmaLast  = _h4Ema.Result.Last(0);
+            // M15 close > M15 EMA20 (helyettesítés H4 EMA20 helyett backtestben)
+            double closeNow = Bars.ClosePrices.Last(1);
+            double emaLast  = _m15Ema20.Result.Last(1);
 
-            return h4CloseNow > h4EmaLast;
-        }
-
-        // ════════════════════════════════════════════════════════════════════
-        //  H4 EMA from M15 Resampling (for backtest compatibility)
-        // ════════════════════════════════════════════════════════════════════
-
-        private DataSeries CreateDataSeries()
-        {
-            // Returns a DataSeries that resamples M15 -> H4 closes
-            return CreateDataSeries("H4_Close");
-        }
-
-        private void ResampleToH4()
-        {
-            // This runs every bar to update the H4 DataSeries
-            if (_h4Close == null || Bars.Count == 0) return;
-
-            // Simple resampling: every 4 M15 bars = 1 H4 bar
-            int h4Index = Bars.Count / 4;
-            if (h4Index > _h4Close.Count - 1)
-            {
-                _h4Close.Add(Bars.ClosePrices.Last(0));
-            }
+            return closeNow > emaLast;
         }
 
         // ════════════════════════════════════════════════════════════════════
