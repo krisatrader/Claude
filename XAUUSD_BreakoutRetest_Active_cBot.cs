@@ -306,7 +306,7 @@ namespace cAlgo.Robots
                     double newSL = Round(entry + Symbol.PipSize);
                     if (pos.StopLoss == null || newSL > pos.StopLoss.Value + Symbol.PipSize)
                     {
-                        var r = ModifyPosition(pos, newSL, pos.TakeProfit);
+                        var r = ModifyPosition(pos, newSL, pos.TakeProfit, ProtectionType.Absolute);
                         if (r.IsSuccessful)
                         {
                             _beTriggered[pos.Id] = true;
@@ -319,7 +319,7 @@ namespace cAlgo.Robots
             {
                 double newSL = Round(bid - bid * (TrailPct / 100.0));
                 if (pos.StopLoss == null || newSL > pos.StopLoss.Value + Symbol.PipSize)
-                    ModifyPosition(pos, newSL, pos.TakeProfit);
+                    ModifyPosition(pos, newSL, pos.TakeProfit, ProtectionType.Absolute);
             }
         }
 

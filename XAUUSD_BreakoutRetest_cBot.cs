@@ -439,7 +439,7 @@ namespace cAlgo.Robots
                     bool needsUpdate = pos.StopLoss == null || newSL > (pos.StopLoss.Value + Symbol.PipSize);
                     if (needsUpdate)
                     {
-                        var result = ModifyPosition(pos, newSL, pos.TakeProfit);
+                        var result = ModifyPosition(pos, newSL, pos.TakeProfit, ProtectionType.Absolute);
                         if (result.IsSuccessful)
                         {
                             _beTriggered[pos.Id] = true;
@@ -458,7 +458,7 @@ namespace cAlgo.Robots
                 bool needsUpdate = pos.StopLoss == null || newSL > (pos.StopLoss.Value + Symbol.PipSize);
                 if (needsUpdate)
                 {
-                    ModifyPosition(pos, newSL, pos.TakeProfit);
+                    ModifyPosition(pos, newSL, pos.TakeProfit, ProtectionType.Absolute);
                 }
             }
         }

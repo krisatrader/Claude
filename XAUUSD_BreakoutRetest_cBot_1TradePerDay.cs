@@ -378,7 +378,7 @@ namespace cAlgo.Robots
                     bool needsUpdate = pos.StopLoss == null || newSL > (pos.StopLoss.Value + Symbol.PipSize);
                     if (needsUpdate)
                     {
-                        var r = ModifyPosition(pos, newSL, pos.TakeProfit);
+                        var r = ModifyPosition(pos, newSL, pos.TakeProfit, ProtectionType.Absolute);
                         if (r.IsSuccessful)
                         {
                             _beTriggered[pos.Id] = true;
@@ -394,7 +394,7 @@ namespace cAlgo.Robots
                 double newSL     = NormalizePrice(bid - trailDist);
                 bool needsUpdate = pos.StopLoss == null || newSL > (pos.StopLoss.Value + Symbol.PipSize);
                 if (needsUpdate)
-                    ModifyPosition(pos, newSL, pos.TakeProfit);
+                    ModifyPosition(pos, newSL, pos.TakeProfit, ProtectionType.Absolute);
             }
         }
 
