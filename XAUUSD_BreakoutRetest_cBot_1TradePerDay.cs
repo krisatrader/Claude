@@ -189,8 +189,15 @@ namespace cAlgo.Robots
             _tradesToday     = 0;
             _currentDay      = Server.Time.Date;
 
+            Positions.Closed += OnPositionsClosed;
+
             Print($"[START] XAUUSD BR-BE2Trail-1PerDay | " +
                   $"SL={SlPct}% TP={TpPct}% BE@{BeTriggerXSL}×SL Trail={TrailStopPct}% MaxTrades={MaxTradesPerDay}/nap");
+        }
+
+        protected override void OnStop()
+        {
+            Positions.Closed -= OnPositionsClosed;
         }
 
         // ────────────────────────────────────────────────────────────────────
@@ -235,7 +242,7 @@ namespace cAlgo.Robots
                 ManagePosition(pos);
         }
 
-        protected override void OnPositionClosed(PositionClosedEventArgs args)
+        private void OnPositionsClosed(PositionClosedEventArgs args)
         {
             var pos = args.Position;
             if (pos.Label != LABEL) return;

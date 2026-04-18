@@ -212,7 +212,14 @@ namespace cAlgo.Robots
             _tradesToday     = 0;
             _currentDay      = Server.Time.Date;
 
+            Positions.Closed += OnPositionsClosed;
+
             Print($"[START] XAUUSD BR-BE2Trail | SL={SlPct}% TP={TpPct}% BE@{BeTriggerXSL}xSL Trail={TrailStopPct}%");
+        }
+
+        protected override void OnStop()
+        {
+            Positions.Closed -= OnPositionsClosed;
         }
 
         // ────────────────────────────────────────────────────────────────────
@@ -270,7 +277,7 @@ namespace cAlgo.Robots
         //  OnPositionClosed — cleanup dictionary entry
         // ────────────────────────────────────────────────────────────────────
 
-        protected override void OnPositionClosed(PositionClosedEventArgs args)
+        private void OnPositionsClosed(PositionClosedEventArgs args)
         {
             var pos = args.Position;
             if (pos.Label != LABEL) return;

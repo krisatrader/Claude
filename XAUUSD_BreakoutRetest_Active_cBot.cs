@@ -143,8 +143,16 @@ namespace cAlgo.Robots
             _tradesToday     = 0;
             _currentDay      = Server.Time.Date;
 
+            // Pozíció zárás esemény feliratkozás (cTrader új API)
+            Positions.Closed += OnPositionsClosed;
+
             Print($"[START] XAUUSD-Active | SL={SlPct}% TP={TpPct}% RR={TpPct/SlPct:F1}:1 " +
                   $"BE@{BeTriggerXSL}×SL Trail={TrailPct}% MaxPos={MaxConcurrent}");
+        }
+
+        protected override void OnStop()
+        {
+            Positions.Closed -= OnPositionsClosed;
         }
 
         // ────────────────────────────────────────────────────────────────────
@@ -184,7 +192,7 @@ namespace cAlgo.Robots
                 ManagePosition(pos);
         }
 
-        protected override void OnPositionClosed(PositionClosedEventArgs args)
+        private void OnPositionsClosed(PositionClosedEventArgs args)
         {
             var pos = args.Position;
             if (pos.Label != LABEL) return;
