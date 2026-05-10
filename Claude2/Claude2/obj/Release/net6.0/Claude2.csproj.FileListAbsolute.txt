@@ -1,0 +1,15 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.csproj.AssemblyReference.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.AssemblyInfoInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.AssemblyInfo.cs
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.csproj.CoreCompileInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/Claude2.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/Claude2.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/Claude2.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/refint/Claude2.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/Claude2.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/obj/Release/net6.0/ref/Claude2.dll
+/var/folders/jz/chnq0jts1dv24q8yhqyp607c0000gn/T/lqgxd3o0.cqk/Claude2.deps.json
+/var/folders/jz/chnq0jts1dv24q8yhqyp607c0000gn/T/lqgxd3o0.cqk/Claude2.dll
+/var/folders/jz/chnq0jts1dv24q8yhqyp607c0000gn/T/lqgxd3o0.cqk/Claude2.pdb

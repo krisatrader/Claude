@@ -1,0 +1,4 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/publish/Claude2.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/publish/Claude2.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/publish/Claude2.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Claude2/Claude2/bin/Release/net6.0/publish/cAlgo.API.dll

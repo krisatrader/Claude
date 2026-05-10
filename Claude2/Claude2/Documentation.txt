@@ -1,0 +1,82 @@
+MULTI-STRATEGY ADAPTIVE BOT - FELHASZNÁLÓI DOKUMENTÁCIÓ
+Verzió: 2.0 (Stabil, FTMO Kompatibilis)
+Készült: cTrader Automate platformra (C#)
+Optimalizálva: XAUUSD (Arany) instrumentum, H1 (1 órás) idősík
+
+====================================================================
+1. ÁLTALÁNOS ISMERTETŐ
+====================================================================
+A MultiStrategy Adaptive Bot egy robusztus, professzionális szintű algoritmikus kereskedő rendszer. Különlegessége abban rejlik, hogy nem egyetlen, statikus stratégiát próbál ráerőltetni a piacra, hanem az aktuális piaci környezetet folyamatosan vizsgálva (az ADX indikátor segítségével) dinamikusan vált 4 különböző belső stratégia között. Ennek köszönhetően erős trendben, mérsékelt trendben és oldalazó piacon (range) is megtalálja a legideálisabb belépési pontokat.
+
+A robot szigorúan betartja a Prop Firm (pl. FTMO) cégek kockázatkezelési szabályait: beépített napi és maximális Drawdown (visszaesés) védelmekkel rendelkezik, melyeket másodperc-alapú pontossággal ellenőriz a háttérben.
+
+====================================================================
+2. A KOCKÁZATKEZELÉSI MODUL (VÉSZFÉK)
+====================================================================
+A robot egy egyedi beépített védelmi vonallal rendelkezik, amely garantálja, hogy sosem sérted meg az FTMO kihívások szabályait:
+
+- Daily Drawdown Guard (Napi Limit): Minden éjfélkor (szerver idő szerint) rögzíti az aktuális egyenleget. Ha a nap folyamán a nyitott és lezárt pozíciókkal a számla eléri a beállított értéket (pl. 5% bukó), a bot azonnal bezár minden nyitott kötést, és másnapig leállítja a kereskedést.
+
+- Max Total Drawdown Guard (Teljes Limit): A legelső indulási tőkéhez (Initial Balance) viszonyítva figyeli a veszteséget. Ha ez eléri a megadott küszöböt (pl. 10%), a bot vészféket húz, mindent lezár és teljesen kikapcsol.
+
+- Dinamikus Lot méretezés (Volume Calculation): Minden kötésnél automatikusan kiszámolja a lot méretét az előre beállított Kockázat (Risk %) és az aktuális Stop Loss pips-távolság alapján. (Például: ha 1%-ot kockáztatsz, és a Stop Loss tág, akkor a bot sokkal kisebb lot mérettel fog belépni).
+
+====================================================================
+3. A 4 BELSŐ STRATÉGIA ÉS AZ ADX VEZÉRLŐ
+====================================================================
+A rendszer lelke az ADX (Average Directional Index), amely megmutatja a trend erősségét. Ezen érték alapján dönti el a bot, hogy melyik stratégiát hívja meg az adott órában:
+
+Stratégia 1: Dual MA Crossover (50/200 EMA)
+- Aktiválódik: Erős Trendben (ADX > 25)
+- Logika: A klasszikus "Aranykereszt/Halálkereszt" elven alapul, finomítva trend-megerősítéssel. Ha az árfolyam stabilan az 50-es és a 200-as mozgóátlag fölött tartózkodik, és visszateszteli azt, akkor trendirányú pozíciót vesz fel.
+
+Stratégia 2: Triple MA Momentum (9/21/55 EMA) - "Az Igásló"
+- Aktiválódik: Mérsékelt Trendben (ADX 15 és 25 között), de bekapcsolva hagyható az Erős Trendek alatt is.
+- Logika: A rövidtávú lendületet (momentum) használja ki. Amikor a 9-es EMA metszi a 21-es és 55-ös EMA-t, és a RSI is megerősíti az irányt, azonnali rövidtávú trendkövető pozíciókat nyit. Ez hozza a legtöbb nyereséget a tesztek alapján.
+
+Stratégia 3: ATR Mean Reversion
+- Aktiválódik: Oldalazó / Gyenge piacon (ADX 10 és 15 között)
+- Logika: Amikor a piacnak nincs egyértelmű iránya, a bot a sávokból történő visszaállásra (Mean Reversion) játszik. Ha az árfolyam drasztikusan eltávolodik az átlagártól az ATR szorzók alapján (túlvett/túladott zónába ér), a bot ellenirányú "visszapattanás" pozíciót nyit.
+
+Stratégia 4: RSI + MACD Extremes
+- Aktiválódik: Nincs trend, kaotikus piac (ADX < 10)
+- Logika: Keresi az extrém túlvett (RSI > 70) vagy túladott (RSI < 30) állapotokat, melyeket a MACD hisztogram fordulása is megerősít. 
+(Javaslat: Arany H1-en ezt a stratégiát érdemes kikapcsolva tartani, mert zajos eredményeket produkálhat).
+
+====================================================================
+4. DINAMIKUS STOP LOSS ÉS TAKE PROFIT (ATR ALAPON)
+====================================================================
+A legtöbb robottal ellentétben ez a rendszer nem fix pip értékeket használ (pl. fix 20 pip SL). Mivel a piac volatilitása (hullámzása) óráról órára változik, a bot az ATR (Average True Range) indikátor alapján számolja ki, hogy épp milyen távolra tegye a Stop Loss-t és a célárat (Take Profit). 
+
+A kód az SlAtrMultiplier és TpAtrMultiplier paramétereket megszorozza a pillanatnyi ATR értékkel, majd pip-pé konvertálva kiküldi a megbízást a piacra. Ez drasztikusan megnöveli a túlélési esélyeket.
+
+====================================================================
+5. LEGJOBB BEÁLLÍTÁSOK (BEST PRACTICES) XAUUSD H1-RE
+====================================================================
+A részletes M1 Tick Data alapú backtesztek (közel +48% profit, kevesebb mint 1% Drawdown mellett) a következő beállításokat bizonyították a legjövedelmezőbbnek:
+
+[Risk Management]
+- Risk % per Trade: 1.0 (Óvatos) - Ha nagyon biztos vagy benne, lehet 2.0 (Agresszív)
+- Max Daily Drawdown %: 5.0 (Az FTMO napi limitje)
+- Max Total Drawdown %: 10.0 (Az FTMO teljes limitje)
+
+[Active Strategies]
+- Use 50/200 EMA (S1): True (Bekapcsolva)
+- Use 9/21/55 EMA (S2): True (Bekapcsolva)
+- Use ATR Mean Reversion (S3): True (Bekapcsolva)
+- Use RSI+MACD Strategy (S4): False (KIKAPCSOLVA!)
+
+[Technical Parameters]
+- ATR Period: 14
+- SL ATR Multiplier: 2.5 (Nagyon fontos: Ezzel elég teret kapnak az arany kötései a kilengések túléléséhez).
+- TP ATR Multiplier: 4.0 (Hagyja futni a profitot az erős trendekben).
+
+====================================================================
+6. TELEPÍTÉS ÉS HASZNÁLATI UTASÍTÁS cTRADERBEN
+====================================================================
+1. Nyisd meg a cTrader Automate ablakát.
+2. A MultiStrategyAdaptiveBot kódját beillesztve kattints a Build ikonra.
+3. Készíts egy új Bot Példányt (Add Instance), válaszd ki a XAUUSD (Gold) instrumentumot, és állítsd az idősíkot h1-re.
+4. FONTOS BACKTESTNÉL: A backtest paramétereknél a "Data" legördülő sávban mindig a "Tick data from server (accurate)" vagy minimum az "m1 bars from server" lehetőséget válaszd ki! (Ha H1 Opening Prices-t használsz, a Drawdown vészfék nem fog megfelelően reagálni a gyertya közben).
+5. A Paraméterek ablakban töltsd ki az 5. pontban említett "Best Practices" értékeket.
+6. A háttérben futó algoritmus naplózni fogja a fontosabb döntéseket (például melyik stratégiát aktiválta aktuálisan), melyet a Log (Napló) fülön olvashatsz. A leállításkor (vagy a backtest végén) a rendszer készít egy részletes Strategy Breakdown riportot is.

@@ -23,7 +23,7 @@
           "Pullback": 0,
           "Breakout": 1
         },
-        "DefaultValue": 1,
+        "DefaultValue": 0,
         "ParameterType": "Enum",
         "PropertyName": "Mode",
         "FriendlyName": "Strategy Mode",
@@ -57,7 +57,7 @@
         "MinValue": 0.1,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 1.0,
+        "DefaultValue": 1.5,
         "ParameterType": "Double",
         "PropertyName": "RiskPerTradePct",
         "FriendlyName": "Risk Per Trade (%)",
@@ -81,7 +81,7 @@
         "MinValue": 1.0,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 30.0,
+        "DefaultValue": 45.0,
         "ParameterType": "Double",
         "PropertyName": "StopLossPips",
         "FriendlyName": "Stop Loss (Pips)",
@@ -135,7 +135,7 @@
         "Description": ""
       },
       {
-        "DefaultValue": true,
+        "DefaultValue": false,
         "ParameterType": "Boolean",
         "PropertyName": "EnablePartialClose",
         "FriendlyName": "A) Részleges Zárás (Partial Close)",
@@ -189,7 +189,7 @@
         "MinValue": 5.0,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 25.0,
+        "DefaultValue": 60.0,
         "ParameterType": "Double",
         "PropertyName": "BreakEvenTriggerPips",
         "FriendlyName": "Break-Even Trigger (Pips)",
@@ -222,7 +222,7 @@
         "MinValue": 5.0,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 30.0,
+        "DefaultValue": 100.0,
         "ParameterType": "Double",
         "PropertyName": "TrailingStopTriggerPips",
         "FriendlyName": "Trailing Stop Trigger (Pips)",
@@ -234,7 +234,7 @@
         "MinValue": 5.0,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 20.0,
+        "DefaultValue": 80.0,
         "ParameterType": "Double",
         "PropertyName": "TrailingStopDistancePips",
         "FriendlyName": "Trailing Stop Distance (Pips)",
@@ -246,7 +246,7 @@
         "MinValue": 1.0,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 5.0,
+        "DefaultValue": 20.0,
         "ParameterType": "Double",
         "PropertyName": "TrailingStopStepPips",
         "FriendlyName": "Trailing Stop Step (Pips)",
@@ -255,7 +255,7 @@
         "Description": ""
       },
       {
-        "DefaultValue": false,
+        "DefaultValue": true,
         "ParameterType": "Boolean",
         "PropertyName": "EnableHtfFilter",
         "FriendlyName": "D) HTF Trend Szűrő",
@@ -273,7 +273,7 @@
         "Description": ""
       },
       {
-        "DefaultValue": false,
+        "DefaultValue": true,
         "ParameterType": "Boolean",
         "PropertyName": "EnableEmaDistanceFilter",
         "FriendlyName": "E) EMA Távolság Szűrő",
@@ -285,7 +285,7 @@
         "MinValue": 0.5,
         "MaxValue": 1.7976931348623157E+308,
         "Step": 0.1,
-        "DefaultValue": 2.0,
+        "DefaultValue": 3.0,
         "ParameterType": "Double",
         "PropertyName": "MaxEmaDistanceAtr",
         "FriendlyName": "E) Max EMA Distance (ATR x)",
@@ -396,7 +396,7 @@
         "MinValue": 1,
         "MaxValue": 2147483647,
         "Step": 1,
-        "DefaultValue": 8,
+        "DefaultValue": 9999,
         "ParameterType": "Integer",
         "PropertyName": "MaxBarsWithoutProfit",
         "FriendlyName": "C) Max Bars Without Profit",
@@ -405,7 +405,7 @@
         "Description": ""
       },
       {
-        "DefaultValue": true,
+        "DefaultValue": false,
         "ParameterType": "Boolean",
         "PropertyName": "EnableOppositeExit",
         "FriendlyName": "Enable Opposite Exit",
@@ -438,7 +438,7 @@
         "Description": ""
       },
       {
-        "DefaultValue": true,
+        "DefaultValue": false,
         "ParameterType": "Boolean",
         "PropertyName": "EnableMomentumExit",
         "FriendlyName": "Enable Momentum Exit",
@@ -459,7 +459,7 @@
         "Description": ""
       },
       {
-        "DefaultValue": true,
+        "DefaultValue": false,
         "ParameterType": "Boolean",
         "PropertyName": "EnableFvgExit",
         "FriendlyName": "Enable FVG Exit",
