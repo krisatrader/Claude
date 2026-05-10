@@ -1,0 +1,5 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/publish/LondonGoldStrategy.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/publish/LondonGoldStrategy.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/publish/LondonGoldStrategy.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/publish/cAlgo.API.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/publish/Python.Runtime.dll

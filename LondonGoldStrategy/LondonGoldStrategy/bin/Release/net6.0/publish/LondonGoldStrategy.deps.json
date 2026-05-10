@@ -1,0 +1,57 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v6.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v6.0": {
+      "LondonGoldStrategy/1.0.0": {
+        "dependencies": {
+          "cTrader.Automate": "1.0.17",
+          "pythonnet": "3.0.5"
+        },
+        "runtime": {
+          "LondonGoldStrategy.dll": {}
+        }
+      },
+      "cTrader.Automate/1.0.17": {
+        "runtime": {
+          "lib/net6.0/cAlgo.API.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "pythonnet/3.0.5": {
+        "runtime": {
+          "lib/netstandard2.0/Python.Runtime.dll": {
+            "assemblyVersion": "3.0.5.0",
+            "fileVersion": "3.0.5.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "LondonGoldStrategy/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "cTrader.Automate/1.0.17": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ftF43vkw+C5DEx3JTZBD5HyHcZrjvyT1RAU5gPs9IiBdaJvrTCZ6lGsf6j4xmNUfD/dfevd/UVP+LS6UHlVkVQ==",
+      "path": "ctrader.automate/1.0.17",
+      "hashPath": "ctrader.automate.1.0.17.nupkg.sha512"
+    },
+    "pythonnet/3.0.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-20UVeB1uDpvCHZi8yNv7VCSUKVRRaxPZWFYhkO+BjfBB9GgOh2vEeucy3U7zTY8xEVCHf2XHpRNfAU/3quxXZw==",
+      "path": "pythonnet/3.0.5",
+      "hashPath": "pythonnet.3.0.5.nupkg.sha512"
+    }
+  }
+}

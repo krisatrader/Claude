@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "chpLE6bIVug=",
+  "success": true,
+  "projectFilePath": "/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/NAS100_8020.csproj",
+  "expectedPackageFiles": [
+    "/Users/sebestyenkristof/.nuget/packages/ctrader.automate/1.0.17/ctrader.automate.1.0.17.nupkg.sha512",
+    "/Users/sebestyenkristof/.nuget/packages/microsoft.netcore.app.ref/6.0.36/microsoft.netcore.app.ref.6.0.36.nupkg.sha512",
+    "/Users/sebestyenkristof/.nuget/packages/microsoft.aspnetcore.app.ref/6.0.36/microsoft.aspnetcore.app.ref.6.0.36.nupkg.sha512"
+  ],
+  "logs": []
+}

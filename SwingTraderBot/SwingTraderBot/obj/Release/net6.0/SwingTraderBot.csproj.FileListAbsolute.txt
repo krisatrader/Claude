@@ -1,0 +1,12 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/SwingTraderBot.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/SwingTraderBot.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/SwingTraderBot.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.csproj.AssemblyReference.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.AssemblyInfoInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.AssemblyInfo.cs
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.csproj.CoreCompileInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/refint/SwingTraderBot.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/SwingTraderBot.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/obj/Release/net6.0/ref/SwingTraderBot.dll

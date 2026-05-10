@@ -1,0 +1,5 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/publish/DanielH_breakout.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/publish/DanielH_breakout.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/publish/DanielH_breakout.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/publish/cAlgo.API.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/publish/Python.Runtime.dll

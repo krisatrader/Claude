@@ -1,0 +1,12 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/DanielH_breakout.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/DanielH_breakout.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/bin/Release/net6.0/DanielH_breakout.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.csproj.AssemblyReference.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.AssemblyInfoInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.AssemblyInfo.cs
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.csproj.CoreCompileInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/refint/DanielH_breakout.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/DanielH_breakout.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/DanielH_breakout/DanielH_breakout/obj/Release/net6.0/ref/DanielH_breakout.dll

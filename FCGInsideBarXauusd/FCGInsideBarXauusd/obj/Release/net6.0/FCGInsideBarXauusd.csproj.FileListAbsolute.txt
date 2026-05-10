@@ -1,0 +1,12 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/FCGInsideBarXauusd.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/FCGInsideBarXauusd.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/FCGInsideBarXauusd.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.csproj.AssemblyReference.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.AssemblyInfoInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.AssemblyInfo.cs
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.csproj.CoreCompileInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/refint/FCGInsideBarXauusd.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/FCGInsideBarXauusd.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/obj/Release/net6.0/ref/FCGInsideBarXauusd.dll

@@ -1,0 +1,4 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/publish/FCGInsideBarXauusd.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/publish/FCGInsideBarXauusd.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/publish/FCGInsideBarXauusd.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/bin/Release/net6.0/publish/cAlgo.API.dll

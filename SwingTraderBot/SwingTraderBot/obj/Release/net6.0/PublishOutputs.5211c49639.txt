@@ -1,0 +1,4 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/publish/SwingTraderBot.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/publish/SwingTraderBot.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/publish/SwingTraderBot.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/SwingTraderBot/SwingTraderBot/bin/Release/net6.0/publish/cAlgo.API.dll

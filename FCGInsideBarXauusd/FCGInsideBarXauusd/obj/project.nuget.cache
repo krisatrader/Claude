@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "5/SxeWH97IY=",
+  "success": true,
+  "projectFilePath": "/Users/sebestyenkristof/cAlgo/Sources/Robots/FCGInsideBarXauusd/FCGInsideBarXauusd/FCGInsideBarXauusd.csproj",
+  "expectedPackageFiles": [
+    "/Users/sebestyenkristof/.nuget/packages/ctrader.automate/1.0.17/ctrader.automate.1.0.17.nupkg.sha512",
+    "/Users/sebestyenkristof/.nuget/packages/microsoft.netcore.app.ref/6.0.36/microsoft.netcore.app.ref.6.0.36.nupkg.sha512",
+    "/Users/sebestyenkristof/.nuget/packages/microsoft.aspnetcore.app.ref/6.0.36/microsoft.aspnetcore.app.ref.6.0.36.nupkg.sha512"
+  ],
+  "logs": []
+}

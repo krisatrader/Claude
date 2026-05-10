@@ -1,0 +1,4 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/publish/NAS100_8020.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/publish/NAS100_8020.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/publish/NAS100_8020.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/publish/cAlgo.API.dll

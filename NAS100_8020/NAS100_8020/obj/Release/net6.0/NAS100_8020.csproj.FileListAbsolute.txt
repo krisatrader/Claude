@@ -1,0 +1,12 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.csproj.AssemblyReference.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.AssemblyInfoInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.AssemblyInfo.cs
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.csproj.CoreCompileInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/NAS100_8020.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/NAS100_8020.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/bin/Release/net6.0/NAS100_8020.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/refint/NAS100_8020.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/NAS100_8020.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/NAS100_8020/NAS100_8020/obj/Release/net6.0/ref/NAS100_8020.dll

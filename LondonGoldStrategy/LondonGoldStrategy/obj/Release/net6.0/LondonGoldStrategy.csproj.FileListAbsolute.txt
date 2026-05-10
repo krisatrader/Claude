@@ -1,0 +1,12 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/LondonGoldStrategy.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/LondonGoldStrategy.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/bin/Release/net6.0/LondonGoldStrategy.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.csproj.AssemblyReference.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.AssemblyInfoInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.AssemblyInfo.cs
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.csproj.CoreCompileInputs.cache
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/refint/LondonGoldStrategy.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/LondonGoldStrategy.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/LondonGoldStrategy/LondonGoldStrategy/obj/Release/net6.0/ref/LondonGoldStrategy.dll

@@ -1,0 +1,4 @@
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Antigrav9000_v2/Antigrav9000_v2/bin/Release/net6.0/publish/Antigrav9000_v2.dll
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Antigrav9000_v2/Antigrav9000_v2/bin/Release/net6.0/publish/Antigrav9000_v2.deps.json
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Antigrav9000_v2/Antigrav9000_v2/bin/Release/net6.0/publish/Antigrav9000_v2.pdb
+/Users/sebestyenkristof/cAlgo/Sources/Robots/Antigrav9000_v2/Antigrav9000_v2/bin/Release/net6.0/publish/cAlgo.API.dll
