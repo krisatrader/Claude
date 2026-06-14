@@ -1,5 +1,5 @@
 /// <summary>
-/// NAS100 ORB + Regime Engine cBot  — v5b
+/// NAS100 ORB + Regime Engine cBot  — v5e
 /// =========================================
 /// Stratégia: Opening Range Breakout (ORB) NAS100 indexre, FTMO Swing számla feltételekkel.
 /// 3-modul adaptív rendszer — automatikus rezsim-váltás.
@@ -57,7 +57,7 @@ using cAlgo.API.Indicators;
 namespace cAlgo.Robots
 {
     [Robot(TimeZone = TimeZones.CentralEuropeanStandardTime, AccessRights = AccessRights.None)]
-    public class NAS100_ORB_RegimeEngine_v5b : Robot
+    public class NAS100_ORB_RegimeEngine_v5e : Robot
     {
         private enum RegimeMode { Trend, Range, Neutral }
 
@@ -86,7 +86,7 @@ namespace cAlgo.Robots
         [Parameter("Range |PDI-NDI| Max (smoothed)", Group = "Smoothed Regime", DefaultValue = 6.0, MinValue = 0.0, MaxValue = 20.0)]
         public double RangePdiNdiMaxSm { get; set; }
 
-        [Parameter("Bar Close Strength Min (ORB filter)", Group = "Smoothed Regime", DefaultValue = 0.60, MinValue = 0.40, MaxValue = 0.90)]
+        [Parameter("Bar Close Strength Min (ORB filter)", Group = "Smoothed Regime", DefaultValue = 0.75, MinValue = 0.40, MaxValue = 0.90)]
         public double BarStrengthMin { get; set; }
 
         // ══════════════════════════════════════════════════════════════
@@ -108,11 +108,17 @@ namespace cAlgo.Robots
         [Parameter("ORB Range Minutes (15 or 30)", Group = "ORB Engine", DefaultValue = 30, MinValue = 5, MaxValue = 60)]
         public int OrbRangeMinutes { get; set; }
 
-        [Parameter("ORB Entry Deadline Hour (CET)", Group = "ORB Engine", DefaultValue = 18, MinValue = 16, MaxValue = 21)]
+        [Parameter("ORB Entry Deadline Hour (CET)", Group = "ORB Engine", DefaultValue = 17, MinValue = 16, MaxValue = 21)]
         public int OrbEntryDeadlineHour { get; set; }
 
         [Parameter("ORB Quality Filter (min range = ATR * mult)", Group = "ORB Engine", DefaultValue = 0.35, MinValue = 0.0, MaxValue = 1.0)]
         public double OrbQualityAtrMult { get; set; }
+
+        [Parameter("Enable H1 Choppiness Filter", Group = "ORB Engine", DefaultValue = true)]
+        public bool EnableH1ChoppinessFilter { get; set; }
+
+        [Parameter("Max H1 Choppiness for Entry", Group = "ORB Engine", DefaultValue = 55.0, MinValue = 40.0, MaxValue = 70.0)]
+        public double MaxH1Choppiness { get; set; }
 
         [Parameter("EMA200 Period", Group = "ORB Engine", DefaultValue = 200, MinValue = 50, MaxValue = 500)]
         public int Ema200Period { get; set; }
@@ -204,6 +210,21 @@ namespace cAlgo.Robots
         [Parameter("Post-Loss Cooldown (bars)", Group = "Risk Manager", DefaultValue = 3, MinValue = 0, MaxValue = 20)]
         public int PostLossCooldownBars { get; set; }
 
+        [Parameter("Enable Drawdown Risk Control", Group = "Risk Manager", DefaultValue = true)]
+        public bool EnableDrawdownRiskControl { get; set; }
+
+        [Parameter("DD Level 1 %", Group = "Risk Manager", DefaultValue = 4.0, MinValue = 1.0, MaxValue = 10.0)]
+        public double DdLevel1 { get; set; }
+
+        [Parameter("DD Level 1 Risk Mult", Group = "Risk Manager", DefaultValue = 0.5, MinValue = 0.1, MaxValue = 1.0)]
+        public double DdLevel1Mult { get; set; }
+
+        [Parameter("DD Level 2 %", Group = "Risk Manager", DefaultValue = 6.0, MinValue = 2.0, MaxValue = 10.0)]
+        public double DdLevel2 { get; set; }
+
+        [Parameter("DD Level 2 Risk Mult", Group = "Risk Manager", DefaultValue = 0.25, MinValue = 0.05, MaxValue = 1.0)]
+        public double DdLevel2Mult { get; set; }
+
         [Parameter("Close Positions at Session End", Group = "Risk Manager", DefaultValue = true)]
         public bool CloseAtSessionEnd { get; set; }
 
@@ -257,16 +278,16 @@ namespace cAlgo.Robots
         [Parameter("RSI Period", Group = "Module B", DefaultValue = 7, MinValue = 3, MaxValue = 14)]
         public int RangeRsiPeriod { get; set; }
 
-        [Parameter("RSI Oversold Level", Group = "Module B", DefaultValue = 25.0, MinValue = 10.0, MaxValue = 35.0)]
+        [Parameter("RSI Oversold Level", Group = "Module B", DefaultValue = 20.0, MinValue = 10.0, MaxValue = 35.0)]
         public double RsiOversold { get; set; }
 
-        [Parameter("RSI Overbought Level", Group = "Module B", DefaultValue = 75.0, MinValue = 65.0, MaxValue = 90.0)]
+        [Parameter("RSI Overbought Level", Group = "Module B", DefaultValue = 80.0, MinValue = 65.0, MaxValue = 90.0)]
         public double RsiOverbought { get; set; }
 
         [Parameter("BB Period", Group = "Module B", DefaultValue = 20, MinValue = 10, MaxValue = 50)]
         public int RangeBbPeriod { get; set; }
 
-        [Parameter("BB StdDev", Group = "Module B", DefaultValue = 2.0, MinValue = 1.0, MaxValue = 3.0)]
+        [Parameter("BB StdDev", Group = "Module B", DefaultValue = 2.5, MinValue = 1.0, MaxValue = 3.0)]
         public double RangeBbStdDev { get; set; }
 
         [Parameter("SL ATR Multiplier (Module B)", Group = "Module B", DefaultValue = 1.2, MinValue = 0.5, MaxValue = 3.0)]
@@ -280,6 +301,9 @@ namespace cAlgo.Robots
 
         [Parameter("Module B Max ADX_sm (ADX cap)", Group = "Module B", DefaultValue = 32.0, MinValue = 20.0, MaxValue = 50.0)]
         public double MaxModBAdxSm { get; set; }
+
+        [Parameter("Enable Daily Trend Filter", Group = "Module B", DefaultValue = true)]
+        public bool EnableDailyTrendFilter { get; set; }
 
         [Parameter("Module B Start Hour (CET)", Group = "Module B", DefaultValue = 9, MinValue = 7, MaxValue = 15)]
         public int RangeStartHour { get; set; }
@@ -341,6 +365,9 @@ namespace cAlgo.Robots
         private AverageTrueRange           _atr;
         private RelativeStrengthIndex      _rsiRange;
         private BollingerBands             _bbRange;
+        private Bars                       _dailyBars;
+        private ExponentialMovingAverage   _dailyEma200;
+        private Bars                       _h1Bars;
 
         // ══════════════════════════════════════════════════════════════
         // PRIVATE — State
@@ -431,6 +458,10 @@ namespace cAlgo.Robots
             _rsiRange = Indicators.RelativeStrengthIndex(Bars.ClosePrices, RangeRsiPeriod);
             _bbRange  = Indicators.BollingerBands(Bars.ClosePrices, RangeBbPeriod, RangeBbStdDev, MovingAverageType.Simple);
 
+            _dailyBars = MarketData.GetBars(TimeFrame.Daily);
+            _dailyEma200 = Indicators.ExponentialMovingAverage(_dailyBars.ClosePrices, Ema200Period);
+            _h1Bars = MarketData.GetBars(TimeFrame.Hour);
+
             _initialBalance    = Account.Balance;
             _challengeStartBal = ChallengeStartBalance > 0 ? ChallengeStartBalance : Account.Balance;
             _peakBalance       = Account.Balance;
@@ -442,10 +473,10 @@ namespace cAlgo.Robots
 
             ParseCustomBlockTimes();
 
-            Print($"[v4] Started | Balance={_initialBalance:F2} | Challenge={_challengeStartBal:F2}");
-            Print($"[v5b] ORB: {OrbStartHour}:{OrbStartMinute:D2}+{OrbRangeMinutes}min | " +
+            Print($"[v5e] Started | Balance={_initialBalance:F2} | Challenge={_challengeStartBal:F2}");
+            Print($"[v5e] ORB: {OrbStartHour}:{OrbStartMinute:D2}+{OrbRangeMinutes}min | " +
                   $"Smooth={SmoothedPeriod} | Trend ADX>{TrendAdxMinSm} CI<{TrendCiMaxSm} |PDI-NDI|>{TrendPdiNdiMinSm}");
-            Print($"[v5b] Range ADX<{RangeAdxMaxSm} CI>{RangeCiMinSm} |PDI-NDI|<{RangePdiNdiMaxSm} | ModB risk={RangeRiskPercent}% SL=ATR×{RangeSlAtrMult} ADXcap={MaxModBAdxSm}");
+            Print($"[v5e] Range ADX<{RangeAdxMaxSm} CI>{RangeCiMinSm} |PDI-NDI|<{RangePdiNdiMaxSm} | ModB risk={RangeRiskPercent}% SL=ATR×{RangeSlAtrMult} ADXcap={MaxModBAdxSm} DailyFilter={EnableDailyTrendFilter} H1Filter={EnableH1ChoppinessFilter} DDRiskControl={EnableDrawdownRiskControl}");
 
             if (EnableLogger)
             {
@@ -553,7 +584,7 @@ namespace cAlgo.Robots
         {
             double alpha     = 2.0 / (SmoothedPeriod + 1.0);
             double adxRaw    = _adxDmi.ADX.Last(1);
-            double ciRaw     = CalculateChoppiness(ChoppinessPeriod);
+            double ciRaw     = CalculateChoppinessForBars(Bars, ChoppinessPeriod);
             double pdiNdiRaw = _adxDmi.DIPlus.Last(1) - _adxDmi.DIMinus.Last(1);
 
             if (!_smoothedInit)
@@ -593,9 +624,9 @@ namespace cAlgo.Robots
         /// <summary>
         /// Choppiness Index = 100 × LOG10(SUM(ATR,N) / (HighestHigh − LowestLow)) / LOG10(N)
         /// </summary>
-        private double CalculateChoppiness(int period)
+        private double CalculateChoppinessForBars(Bars bars, int period)
         {
-            if (Bars.Count < period + 1) return 61.8;
+            if (bars.Count < period + 1) return 61.8;
 
             double atrSum      = 0;
             double highestHigh = double.MinValue;
@@ -603,9 +634,9 @@ namespace cAlgo.Robots
 
             for (int i = 1; i <= period; i++)
             {
-                double high      = Bars.HighPrices.Last(i);
-                double low       = Bars.LowPrices.Last(i);
-                double prevClose = Bars.ClosePrices.Last(i + 1);
+                double high      = bars.HighPrices.Last(i);
+                double low       = bars.LowPrices.Last(i);
+                double prevClose = bars.ClosePrices.Last(i + 1);
 
                 double tr = Math.Max(high - low,
                             Math.Max(Math.Abs(high - prevClose),
@@ -781,6 +812,17 @@ namespace cAlgo.Robots
             {
                 Print($"[Module-A] ORB range too narrow ({(_orbHigh - _orbLow):F1} pts < ATR×{OrbQualityAtrMult}={atrNow * OrbQualityAtrMult:F1}) — skip");
                 return;
+            }
+
+            // ── H1 Choppiness Filter ──────────────────────────────────
+            if (EnableH1ChoppinessFilter && _h1Bars.ClosePrices.Count >= ChoppinessPeriod + 1)
+            {
+                double h1Choppiness = CalculateChoppinessForBars(_h1Bars, ChoppinessPeriod);
+                if (h1Choppiness > MaxH1Choppiness)
+                {
+                    Print($"[Module-A] H1 Choppiness too high ({h1Choppiness:F1} > {MaxH1Choppiness}) — skip ORB entry");
+                    return;
+                }
             }
 
             // ── EMA200 trend filter ──────────────────────────────────
@@ -1173,6 +1215,17 @@ namespace cAlgo.Robots
             double atr       = _atr.Result.Last(1);
             double slDist    = atr * RangeSlAtrMult;
 
+            bool dailyBullish = true;
+            bool dailyBearish = true;
+
+            if (EnableDailyTrendFilter && _dailyBars.ClosePrices.Count >= 200)
+            {
+                double dailyClose = _dailyBars.ClosePrices.Last(1);
+                double dailyEmaVal = _dailyEma200.Result.Last(1);
+                dailyBullish = dailyClose > dailyEmaVal;
+                dailyBearish = dailyClose < dailyEmaVal;
+            }
+
             bool longSignal  = false;
             bool shortSignal = false;
 
@@ -1180,7 +1233,8 @@ namespace cAlgo.Robots
             if (lastClose < bbLower
                 && rsi < RsiOversold
                 && lastClose > ema200
-                && (bbMid - lastClose) > slDist)
+                && (bbMid - lastClose) > slDist
+                && (!EnableDailyTrendFilter || dailyBullish))
             {
                 longSignal = true;
             }
@@ -1189,7 +1243,8 @@ namespace cAlgo.Robots
             if (lastClose > bbUpper
                 && rsi > RsiOverbought
                 && lastClose < ema200
-                && (lastClose - bbMid) > slDist)
+                && (lastClose - bbMid) > slDist
+                && (!EnableDailyTrendFilter || dailyBearish))
             {
                 shortSignal = true;
             }
@@ -1200,7 +1255,16 @@ namespace cAlgo.Robots
             double stopPips     = slDist / Symbol.PipSize;
             if (stopPips <= 0) return;
 
-            double volume = CalculateVolumeWithRisk(stopPips, RangeRiskPercent);
+            double risk = RangeRiskPercent;
+            double mult = GetRiskMultiplier();
+            if (mult < 1.0)
+            {
+                double originalRisk = risk;
+                risk *= mult;
+                Print($"[Risk Control] Module B: Drawdown is {GetCurrentDrawdownPercent():F2}% | Risk scaled from {originalRisk:F2}% to {risk:F2}% (Mult={mult})");
+            }
+
+            double volume = CalculateVolumeWithRisk(stopPips, risk);
             if (volume <= 0) return;
 
             bool execOk = ExecuteEntryOrder(direction, volume, stopPips, LabelRange);
@@ -1444,11 +1508,22 @@ namespace cAlgo.Robots
         private double CalculateVolume(double stopPips)
         {
             double adxNow = _adxDmi.ADX.Last(1);
-            double ciNow  = CalculateChoppiness(ChoppinessPeriod);
+            double ciNow  = CalculateChoppinessForBars(Bars, ChoppinessPeriod);
             bool   gradeA = adxNow > GradeAAdxMin && ciNow < GradeACiMax;
             double risk   = gradeA ? GradeARiskPercent : RiskPercent;
-            if (gradeA)
+
+            double mult = GetRiskMultiplier();
+            if (mult < 1.0)
+            {
+                double originalRisk = risk;
+                risk *= mult;
+                Print($"[Risk Control] Drawdown is {GetCurrentDrawdownPercent():F2}% | Module A risk scaled from {originalRisk:F2}% to {risk:F2}% (Mult={mult})");
+            }
+            else if (gradeA)
+            {
                 Print($"[Risk] Grade-A (ADX={adxNow:F1}>{GradeAAdxMin} CI={ciNow:F1}<{GradeACiMax}) → {risk}% risk");
+            }
+
             return CalculateVolumeWithRisk(stopPips, risk);
         }
 
@@ -1460,6 +1535,32 @@ namespace cAlgo.Robots
             volume            = Symbol.NormalizeVolumeInUnits(volume);
             volume            = Math.Min(volume, MaxPositionSizeUnits);
             return Math.Min(volume, Symbol.VolumeInUnitsMax);
+        }
+
+        private double GetCurrentDrawdownPercent()
+        {
+            double peak = Math.Max(_peakBalance, _challengeStartBal);
+            double current = Account.Equity;
+            if (peak <= 0) return 0;
+            return (peak - current) / peak * 100.0;
+        }
+
+        private double GetRiskMultiplier()
+        {
+            if (!EnableDrawdownRiskControl) return 1.0;
+
+            double ddPct = GetCurrentDrawdownPercent();
+
+            if (ddPct >= DdLevel2)
+            {
+                return DdLevel2Mult;
+            }
+            if (ddPct >= DdLevel1)
+            {
+                return DdLevel1Mult;
+            }
+
+            return 1.0;
         }
 
         private double GetDonchianHigh(int period)
@@ -1497,7 +1598,7 @@ namespace cAlgo.Robots
         private void LogStartupBanner()
         {
             Print(Sep);
-            Print($"[LOGGER] NAS100 ORB + Regime Engine — v5b — INDULÁS");
+            Print($"[LOGGER] NAS100 ORB + Regime Engine — v5e — INDULÁS");
             Print($"[LOGGER] Időpont    : {_botStartTime:yyyy-MM-dd HH:mm:ss} CET");
             Print($"[LOGGER] Számla     : {Account.Number} | {Account.BrokerName}");
             Print($"[LOGGER] Balance    : {Account.Balance:F2} {Account.Asset.Name}");
@@ -1524,6 +1625,7 @@ namespace cAlgo.Robots
             Print($"[PARAMS]  ORB Start           = {OrbStartHour}:{OrbStartMinute:D2} CET +{OrbRangeMinutes}min");
             Print($"[PARAMS]  ORB Entry Deadline  = {OrbEntryDeadlineHour}:00 CET");
             Print($"[PARAMS]  ORB Quality Filter  = ATR × {OrbQualityAtrMult}");
+            Print($"[PARAMS]  H1 Choppiness Filter = {EnableH1ChoppinessFilter} (Max={MaxH1Choppiness})");
             Print($"[PARAMS]  EMA200 Period       = {Ema200Period}");
             Print($"[PARAMS]  ATR Period          = {AtrPeriod}");
             Print($"[PARAMS]  SL ATR Mult (Mod-A) = {SlAtrMultiplier}×");
@@ -1543,6 +1645,7 @@ namespace cAlgo.Robots
             Print($"[PARAMS]  Max Total DD        = {MaxTotalDrawdownPct}%");
             Print($"[PARAMS]  Max Spread          = {MaxSpreadPips}p");
             Print($"[PARAMS]  Post-Loss Cooldown  = {PostLossCooldownBars} bars");
+            Print($"[PARAMS]  DD Risk Control     = {EnableDrawdownRiskControl} (L1={DdLevel1}% mult={DdLevel1Mult}, L2={DdLevel2}% mult={DdLevel2Mult})");
             Print($"[PARAMS]  Session End         = {SessionEndHour}:00 CET");
 
             Print("[PARAMS] ── Module B — BB Reversion ────────────────────────────");
@@ -1552,6 +1655,7 @@ namespace cAlgo.Robots
             Print($"[PARAMS]  Risk/Trade (Mod-B)  = {RangeRiskPercent}%");
             Print($"[PARAMS]  Max per session     = {MaxRangeTradesPerSession}");
             Print($"[PARAMS]  ADX cap (MaxModBAdxSm) = {MaxModBAdxSm} [v5b]");
+            Print($"[PARAMS]  Enable Daily Filter = {EnableDailyTrendFilter}");
             Print($"[PARAMS]  Start hour          = {RangeStartHour}:00 CET");
 
             Print("[PARAMS] ── Execution Engine ───────────────────────────────────");
@@ -1587,7 +1691,7 @@ namespace cAlgo.Robots
             if (TradeDetailLevel >= 3)
             {
                 double adx   = _adxDmi.ADX.Last(1);
-                double ci    = CalculateChoppiness(ChoppinessPeriod);
+                double ci    = CalculateChoppinessForBars(Bars, ChoppinessPeriod);
                 double ema200 = _ema200.Result.Last(1);
                 double atr   = _atr.Result.Last(1);
                 Print($"[HEARTBEAT] Raw — ADX={adx:F1} CI={ci:F1} | EMA200={ema200:F2} ATR={atr:F2}");
@@ -1613,7 +1717,7 @@ namespace cAlgo.Robots
         {
             string module = _lastTradeIsRange ? "MODULE-B (BB Reversion)" : "MODULE-A (ORB Trend)";
             double adx    = _adxDmi.ADX.Last(1);
-            double ci     = CalculateChoppiness(ChoppinessPeriod);
+            double ci     = CalculateChoppinessForBars(Bars, ChoppinessPeriod);
             double atr    = _atr.Result.Last(1);
             double ema200 = _ema200.Result.Last(1);
             RegimeMode regime = GetCurrentRegime();
@@ -1702,7 +1806,7 @@ namespace cAlgo.Robots
             double finalDD     = (_challengeStartBal - Account.Balance) / _challengeStartBal * 100.0;
 
             Print(Sep);
-            Print($"[LOGGER] NAS100 ORB Regime Engine v4.0 — LEÁLLÁS");
+            Print($"[LOGGER] NAS100 ORB Regime Engine v5e — LEÁLLÁS");
             Print($"[LOGGER]  Futási idő    : {runHours:F1} óra");
             Print($"[LOGGER]  {_botStartTime:yyyy-MM-dd HH:mm} → {Server.Time:yyyy-MM-dd HH:mm} CET");
             Print(Sep2);
