@@ -114,7 +114,7 @@ namespace cAlgo.Robots
         [Parameter("ORB Quality Filter (min range = ATR * mult)", Group = "ORB Engine", DefaultValue = 0.35, MinValue = 0.0, MaxValue = 1.0)]
         public double OrbQualityAtrMult { get; set; }
 
-        [Parameter("Enable H1 Choppiness Filter", Group = "ORB Engine", DefaultValue = true)]
+        [Parameter("Enable H1 Choppiness Filter", Group = "ORB Engine", DefaultValue = false)]
         public bool EnableH1ChoppinessFilter { get; set; }
 
         [Parameter("Max H1 Choppiness for Entry", Group = "ORB Engine", DefaultValue = 55.0, MinValue = 40.0, MaxValue = 70.0)]
@@ -210,7 +210,7 @@ namespace cAlgo.Robots
         [Parameter("Post-Loss Cooldown (bars)", Group = "Risk Manager", DefaultValue = 3, MinValue = 0, MaxValue = 20)]
         public int PostLossCooldownBars { get; set; }
 
-        [Parameter("Enable Drawdown Risk Control", Group = "Risk Manager", DefaultValue = true)]
+        [Parameter("Enable Drawdown Risk Control", Group = "Risk Manager", DefaultValue = false)]
         public bool EnableDrawdownRiskControl { get; set; }
 
         [Parameter("DD Level 1 %", Group = "Risk Manager", DefaultValue = 4.0, MinValue = 1.0, MaxValue = 10.0)]
@@ -302,7 +302,7 @@ namespace cAlgo.Robots
         [Parameter("Module B Max ADX_sm (ADX cap)", Group = "Module B", DefaultValue = 32.0, MinValue = 20.0, MaxValue = 50.0)]
         public double MaxModBAdxSm { get; set; }
 
-        [Parameter("Enable Daily Trend Filter", Group = "Module B", DefaultValue = true)]
+        [Parameter("Enable Daily Trend Filter", Group = "Module B", DefaultValue = false)]
         public bool EnableDailyTrendFilter { get; set; }
 
         [Parameter("Module B Start Hour (CET)", Group = "Module B", DefaultValue = 9, MinValue = 7, MaxValue = 15)]
