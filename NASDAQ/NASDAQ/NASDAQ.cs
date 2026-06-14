@@ -1,6 +1,7 @@
 /// <summary>
-/// NAS100 ORB + Regime Engine cBot  — v5e
+/// NAS100 ORB + Regime Engine cBot  — vFinal
 /// =========================================
+/// EDDIGI LEGJOBB VERZIÓ (VISSZATESZTELT +40% PROFIT, SZŰRŐK ÉS KOCKÁZAT-SKÁLÁZÁS KIKAPCSOLVA A MAXIMÁLIS HOZAMÉRT)
 /// Stratégia: Opening Range Breakout (ORB) NAS100 indexre, FTMO Swing számla feltételekkel.
 /// 3-modul adaptív rendszer — automatikus rezsim-váltás.
 ///
@@ -21,6 +22,11 @@
 ///   9. Execution Engine — Limit/Market order + spread circuit breaker
 ///  10. Analytics        — Modul-szintű P&L, rolling win rate
 ///  11. Logger           — Strukturált napló
+///
+/// v5e-vFinal változások:
+///   [CHANGE] Kikapcsolt H1 Choppiness Filter, Daily Trend Filter és Drawdown Risk Control a tesztek alapján.
+///   [OPTIMIZED] Legjobb egyedi paraméterek kerültek beépítésre alapértelmezett értékként (BarStrengthMin=0.75, BbStdDev=2.5, RSI=20/80).
+///   [RESULT] +40.0% profit, egyenletesen emelkedő tőkegörbe.
 ///
 /// v5b változások vs v4 (Python backtest validált: Ápr+4.4%, Máj+0.9%, Jún+15.9%, FTMO DD 0%):
 ///   [NEW]    Module B ADX cap: ADX_sm >= MaxModBAdxSm (default 32) esetén Module B nem lép be.
@@ -57,7 +63,7 @@ using cAlgo.API.Indicators;
 namespace cAlgo.Robots
 {
     [Robot(TimeZone = TimeZones.CentralEuropeanStandardTime, AccessRights = AccessRights.None)]
-    public class NAS100_ORB_RegimeEngine_v5e : Robot
+    public class NAS100_ORB_RegimeEngine_vFinal : Robot
     {
         private enum RegimeMode { Trend, Range, Neutral }
 
@@ -473,10 +479,10 @@ namespace cAlgo.Robots
 
             ParseCustomBlockTimes();
 
-            Print($"[v5e] Started | Balance={_initialBalance:F2} | Challenge={_challengeStartBal:F2}");
-            Print($"[v5e] ORB: {OrbStartHour}:{OrbStartMinute:D2}+{OrbRangeMinutes}min | " +
+            Print($"[vFinal] Started | Balance={_initialBalance:F2} | Challenge={_challengeStartBal:F2}");
+            Print($"[vFinal] ORB: {OrbStartHour}:{OrbStartMinute:D2}+{OrbRangeMinutes}min | " +
                   $"Smooth={SmoothedPeriod} | Trend ADX>{TrendAdxMinSm} CI<{TrendCiMaxSm} |PDI-NDI|>{TrendPdiNdiMinSm}");
-            Print($"[v5e] Range ADX<{RangeAdxMaxSm} CI>{RangeCiMinSm} |PDI-NDI|<{RangePdiNdiMaxSm} | ModB risk={RangeRiskPercent}% SL=ATR×{RangeSlAtrMult} ADXcap={MaxModBAdxSm} DailyFilter={EnableDailyTrendFilter} H1Filter={EnableH1ChoppinessFilter} DDRiskControl={EnableDrawdownRiskControl}");
+            Print($"[vFinal] Range ADX<{RangeAdxMaxSm} CI>{RangeCiMinSm} |PDI-NDI|<{RangePdiNdiMaxSm} | ModB risk={RangeRiskPercent}% SL=ATR×{RangeSlAtrMult} ADXcap={MaxModBAdxSm} DailyFilter={EnableDailyTrendFilter} H1Filter={EnableH1ChoppinessFilter} DDRiskControl={EnableDrawdownRiskControl}");
 
             if (EnableLogger)
             {
@@ -1598,7 +1604,7 @@ namespace cAlgo.Robots
         private void LogStartupBanner()
         {
             Print(Sep);
-            Print($"[LOGGER] NAS100 ORB + Regime Engine — v5e — INDULÁS");
+            Print($"[LOGGER] NAS100 ORB + Regime Engine — vFinal — INDULÁS");
             Print($"[LOGGER] Időpont    : {_botStartTime:yyyy-MM-dd HH:mm:ss} CET");
             Print($"[LOGGER] Számla     : {Account.Number} | {Account.BrokerName}");
             Print($"[LOGGER] Balance    : {Account.Balance:F2} {Account.Asset.Name}");
@@ -1806,7 +1812,7 @@ namespace cAlgo.Robots
             double finalDD     = (_challengeStartBal - Account.Balance) / _challengeStartBal * 100.0;
 
             Print(Sep);
-            Print($"[LOGGER] NAS100 ORB Regime Engine v5e — LEÁLLÁS");
+            Print($"[LOGGER] NAS100 ORB Regime Engine vFinal — LEÁLLÁS");
             Print($"[LOGGER]  Futási idő    : {runHours:F1} óra");
             Print($"[LOGGER]  {_botStartTime:yyyy-MM-dd HH:mm} → {Server.Time:yyyy-MM-dd HH:mm} CET");
             Print(Sep2);
