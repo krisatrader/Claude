@@ -452,6 +452,9 @@ namespace cAlgo.Robots
                 LogStartupBanner();
                 if (LogParamDumpOnStart) LogParameterDump();
             }
+
+            Positions.Closed += OnPositionClosed;
+            PendingOrders.Filled += OnPendingOrderFilled;
         }
 
         protected override void OnBar()
@@ -506,7 +509,7 @@ namespace cAlgo.Robots
             Print($"[v4] Stopped. Final balance: {Account.Balance:F2}");
         }
 
-        protected override void OnPositionClosed(PositionClosedEventArgs args)
+        private void OnPositionClosed(PositionClosedEventArgs args)
         {
             var pos = args.Position;
             if (pos.Label != Label && pos.Label != LabelRange) return;
@@ -520,7 +523,7 @@ namespace cAlgo.Robots
             }
         }
 
-        protected override void OnPendingOrderFilled(PendingOrderFilledEventArgs args)
+        private void OnPendingOrderFilled(PendingOrderFilledEventArgs args)
         {
             var pos = args.Position;
             if (pos == null) return;
