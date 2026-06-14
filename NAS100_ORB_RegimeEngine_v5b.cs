@@ -921,13 +921,13 @@ namespace cAlgo.Robots
             // STEP 3: Break-Even
             if (!_breakEvenSet && _partialCloseDone)
             {
-                ModifyPosition(pos, pos.EntryPrice, pos.TakeProfit);
+                ModifyPosition(pos, pos.EntryPrice, pos.TakeProfit, ProtectionType.Absolute);
                 _breakEvenSet = true;
                 Print($"[Module-A Exit] Break-even set @ {pos.EntryPrice:F2}");
             }
             else if (!_breakEvenSet && currentPips >= _initialSlPips * BreakEvenRMultiple)
             {
-                ModifyPosition(pos, pos.EntryPrice, pos.TakeProfit);
+                ModifyPosition(pos, pos.EntryPrice, pos.TakeProfit, ProtectionType.Absolute);
                 _breakEvenSet = true;
                 Print($"[Module-A Exit] Break-even set @ {pos.EntryPrice:F2} ({BreakEvenRMultiple}R)");
             }
@@ -994,13 +994,13 @@ namespace cAlgo.Robots
                 {
                     double newSl = Symbol.Bid - trailDistancePips * Symbol.PipSize;
                     if (pos.StopLoss == null || newSl > pos.StopLoss.Value)
-                        ModifyPosition(pos, newSl, pos.TakeProfit);
+                        ModifyPosition(pos, newSl, pos.TakeProfit, ProtectionType.Absolute);
                 }
                 else
                 {
                     double newSl = Symbol.Ask + trailDistancePips * Symbol.PipSize;
                     if (pos.StopLoss == null || newSl < pos.StopLoss.Value)
-                        ModifyPosition(pos, newSl, pos.TakeProfit);
+                        ModifyPosition(pos, newSl, pos.TakeProfit, ProtectionType.Absolute);
                 }
             }
         }
@@ -1247,8 +1247,11 @@ namespace cAlgo.Robots
                         ? Symbol.Ask - LimitOrderOffsetPips * Symbol.PipSize
                         : Symbol.Bid + LimitOrderOffsetPips * Symbol.PipSize;
 
+                    double stopLossPrice = direction == TradeType.Buy
+                        ? limitPrice - stopPips * Symbol.PipSize
+                        : limitPrice + stopPips * Symbol.PipSize;
                     var orderResult = PlaceLimitOrder(direction, SymbolName, volume, limitPrice,
-                                                      label, stopPips, null);
+                                                      label, stopLossPrice, null);
                     if (orderResult.IsSuccessful)
                     {
                         _limitOrderActive        = true;
@@ -1497,8 +1500,8 @@ namespace cAlgo.Robots
             Print($"[LOGGER] NAS100 ORB + Regime Engine — v5b — INDULÁS");
             Print($"[LOGGER] Időpont    : {_botStartTime:yyyy-MM-dd HH:mm:ss} CET");
             Print($"[LOGGER] Számla     : {Account.Number} | {Account.BrokerName}");
-            Print($"[LOGGER] Balance    : {Account.Balance:F2} {Account.Currency}");
-            Print($"[LOGGER] Challenge  : {_challengeStartBal:F2} {Account.Currency}");
+            Print($"[LOGGER] Balance    : {Account.Balance:F2} {Account.Asset.Name}");
+            Print($"[LOGGER] Challenge  : {_challengeStartBal:F2} {Account.Asset.Name}");
             Print($"[LOGGER] Instrument : {SymbolName} | TF: {TimeFrame}");
             Print(Sep);
         }
@@ -1666,7 +1669,7 @@ namespace cAlgo.Robots
             Print($"[TRADE CLOSE #{_logTradeSeq}]  Időpont    : {Server.Time:yyyy-MM-dd HH:mm:ss} CET");
             Print($"[TRADE CLOSE #{_logTradeSeq}]  Entry      : {pos.EntryPrice:F5}");
             Print($"[TRADE CLOSE #{_logTradeSeq}]  Pips       : {pipsResult:F1} | R: {rMultiple:F2}R");
-            Print($"[TRADE CLOSE #{_logTradeSeq}]  Nettó P&L  : {pos.NetProfit:F2} {Account.Currency}");
+            Print($"[TRADE CLOSE #{_logTradeSeq}]  Nettó P&L  : {pos.NetProfit:F2} {Account.Asset.Name}");
 
             if (TradeDetailLevel >= 2)
             {
@@ -1703,11 +1706,11 @@ namespace cAlgo.Robots
             Print($"[LOGGER]  Futási idő    : {runHours:F1} óra");
             Print($"[LOGGER]  {_botStartTime:yyyy-MM-dd HH:mm} → {Server.Time:yyyy-MM-dd HH:mm} CET");
             Print(Sep2);
-            Print($"[LOGGER]  Nyitó balance : {_initialBalance:F2} {Account.Currency}");
-            Print($"[LOGGER]  Záró balance  : {Account.Balance:F2} {Account.Currency}");
-            Print($"[LOGGER]  Nettó P&L     : {totalPnl:F2} {Account.Currency}");
+            Print($"[LOGGER]  Nyitó balance : {_initialBalance:F2} {Account.Asset.Name}");
+            Print($"[LOGGER]  Záró balance  : {Account.Balance:F2} {Account.Asset.Name}");
+            Print($"[LOGGER]  Nettó P&L     : {totalPnl:F2} {Account.Asset.Name}");
             Print($"[LOGGER]  Challenge DD  : {finalDD:F2}% / {MaxTotalDrawdownPct}%");
-            Print($"[LOGGER]  Peak balance  : {_peakBalance:F2} {Account.Currency}");
+            Print($"[LOGGER]  Peak balance  : {_peakBalance:F2} {Account.Asset.Name}");
             Print(Sep2);
             Print($"[LOGGER]  Összes trade  : {totalTrades} | Win Rate: {overallWR:F1}% ({totalWins}W/{totalTrades - totalWins}L)");
             Print($"[LOGGER]  Module-A      : {_winModA + _lossModA} trades | {_winModA}W/{_lossModA}L | P&L={_totalPnlModA:F2}");
