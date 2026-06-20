@@ -39,7 +39,7 @@ namespace cAlgo.Robots
         public double PipSize { get; set; }
 
         // ── Paraméterek: Kockázat ────────────────────────────────
-        [Parameter("Risk % per Trade", Group = "Risk", DefaultValue = 0.5, MinValue = 0.1, MaxValue = 3.0)]
+        [Parameter("Risk % per Trade", Group = "Risk", DefaultValue = 1.1, MinValue = 0.1, MaxValue = 3.0)]
         public double RiskPercent { get; set; }
 
         [Parameter("Max Daily DD %", Group = "Risk", DefaultValue = 4.0, MinValue = 1.0, MaxValue = 10.0)]
@@ -80,7 +80,7 @@ namespace cAlgo.Robots
         public int TradeWindowMinutes { get; set; }
 
         // ── Paraméterek: Hír-szűrő ───────────────────────────────
-        [Parameter("Use News Filter", Group = "News", DefaultValue = true)]
+        [Parameter("Use News Filter", Group = "News", DefaultValue = false)]
         public bool UseNewsFilter { get; set; }
 
         // Pontosvesszővel elvalasztott UTC idopontok, pl: "2026-01-29 19:00; 2026-02-12 13:30"
@@ -103,7 +103,7 @@ namespace cAlgo.Robots
         [Parameter("Use RVOL Filter", Group = "Volume", DefaultValue = true)]
         public bool UseRelVolFilter { get; set; }
 
-        [Parameter("RVOL Multiplier", Group = "Volume", DefaultValue = 1.2, MinValue = 0.5, MaxValue = 5.0)]
+        [Parameter("RVOL Multiplier", Group = "Volume", DefaultValue = 0.5, MinValue = 0.1, MaxValue = 5.0)]
         public double RelVolMultiplier { get; set; }
 
         [Parameter("RVOL Lookback (days)", Group = "Volume", DefaultValue = 20, MinValue = 3, MaxValue = 100)]
@@ -116,19 +116,19 @@ namespace cAlgo.Robots
         [Parameter("Directional Filter", Group = "Strategy", DefaultValue = true)]
         public bool DirectionalFilter { get; set; }
 
-        [Parameter("Min OR Width (pips)", Group = "Strategy", DefaultValue = 5.0, MinValue = 0.0, MaxValue = 500.0)]
+        [Parameter("Min OR Width (pips)", Group = "Strategy", DefaultValue = 30.0, MinValue = 0.0, MaxValue = 500.0)]
         public double MinOrWidthPips { get; set; }
 
         [Parameter("Max OR Width (pips)", Group = "Strategy", DefaultValue = 150.0, MinValue = 0.0, MaxValue = 5000.0)]
         public double MaxOrWidthPips { get; set; }
 
-        [Parameter("TP (R multiple)", Group = "Strategy", DefaultValue = 3.0, MinValue = 1.0, MaxValue = 15.0)]
+        [Parameter("TP (R multiple)", Group = "Strategy", DefaultValue = 12.0, MinValue = 1.0, MaxValue = 15.0)]
         public double TpRMultiple { get; set; }
 
-        [Parameter("Breakeven at (R)", Group = "Strategy", DefaultValue = 1.0, MinValue = 0.0, MaxValue = 5.0)]
+        [Parameter("Breakeven at (R)", Group = "Strategy", DefaultValue = 1.5, MinValue = 0.0, MaxValue = 5.0)]
         public double BreakevenR { get; set; }
 
-        [Parameter("Trail after BE (ATR x)", Group = "Strategy", DefaultValue = 2.0, MinValue = 0.0, MaxValue = 10.0)]
+        [Parameter("Trail after BE (ATR x)", Group = "Strategy", DefaultValue = 0.0, MinValue = 0.0, MaxValue = 10.0)]
         public double TrailAtrMult { get; set; }
 
         [Parameter("ATR Period", Group = "Strategy", DefaultValue = 14, MinValue = 5, MaxValue = 50)]
@@ -138,7 +138,7 @@ namespace cAlgo.Robots
         public double TrailMinStepPips { get; set; }
 
         // ── Paraméterek: Naplózás ────────────────────────────────
-        [Parameter("Log Verbosity", Group = "Logging", DefaultValue = LogVerbosity.Verbose)]
+        [Parameter("Log Verbosity", Group = "Logging", DefaultValue = LogVerbosity.Debug)]
         public LogVerbosity LogLevel { get; set; }
 
         // ── Indikátorok ──────────────────────────────────────────
