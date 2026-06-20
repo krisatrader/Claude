@@ -9,8 +9,8 @@ using cAlgo.API.Internals;
 namespace cAlgo.Robots
 {
     /// <summary>
-    /// ORB-Prop v4 — Opening Range Breakout cBot index CFD-ekre (FTMO US100 / US30 / US500).
-    ///
+    /// ORB-Prop v4.1 — Opening Range Breakout cBot index CFD-ekre (FTMO US100 / US30 / US500).
+    /// KRISA
     /// Verziótörténet (a felülvizsgálati megjegyzések beépítve):
     ///   (1) PIP paraméter: a küszöbök és a napló mértékegysége; alapért. FTMO US100 (1 pont = 1.0).
     ///       A pozícióméretezés és az SL/TP elhelyezés ÁRFOLYAM-alapú / natív pip → minden brókeren helyes.
@@ -18,6 +18,8 @@ namespace cAlgo.Robots
     ///   (3) Teljes DD elérésekor a robot SZÁNDÉKOSAN véglegesen leáll (Stop) — lásd a kódban.
     ///   (4) A napi DD 00:00 UTC-kor vált; a stratégia ablakára nincs hatása — lásd a kódban.
     ///   (5) Amerikai félnapos ünnepeket nem kezel külön — lásd a kódban.
+    ///   (6) Virtual Capital: Virtuális alaptőke paraméter pozícióméretezéshez tőkeallokáció esetén (pl. 25k futás 50k-s számlán).
+    ///       A drawdown védelem továbbra is a teljes valós számlát védi a szabálysértés ellen.
     ///
     /// Korábbi alapok: auto US szakasz + DST, relatív volumen (Stocks in Play) szűrő, hír-szűrő,
     /// részletes naplózás, fix töredékes kockázat, nincs overnight kitettség.
@@ -53,6 +55,9 @@ namespace cAlgo.Robots
 
         [Parameter("Max Trades / Day", Group = "Risk", DefaultValue = 1, MinValue = 1, MaxValue = 5)]
         public int MaxTradesPerDay { get; set; }
+
+        [Parameter("Virtual Capital (0=Auto)", Group = "Risk", DefaultValue = 0.0, MinValue = 0.0, MaxValue = 10000000.0)]
+        public double VirtualCapital { get; set; }
 
         // ── Paraméterek: Szakasz ─────────────────────────────────
         [Parameter("Auto US Session (DST)", Group = "Session", DefaultValue = true)]
@@ -165,6 +170,17 @@ namespace cAlgo.Robots
         private double _initialRiskPips;   // natív pip (Symbol.PipSize) — a BE/trail/R ezzel konzisztens
         private bool _beDone;
 
+        // ── Állapot: virtuális tőke ──────────────────────────────
+        private double _virtualBalance;
+
+        private double CurrentVirtualBalance
+        {
+            get
+            {
+                return VirtualCapital > 0 ? _virtualBalance : Account.Balance;
+            }
+        }
+
         // ── Állapot: hírek ───────────────────────────────────────
         private readonly List<DateTime> _newsEvents = new List<DateTime>();
 
@@ -185,8 +201,21 @@ namespace cAlgo.Robots
             ParseNewsEvents();
             Positions.Closed += OnPositionClosed;
 
+            _virtualBalance = VirtualCapital;
+            if (VirtualCapital > 0)
+            {
+                foreach (var trade in History)
+                {
+                    if (trade.Label == Label && trade.SymbolName == SymbolName)
+                    {
+                        _virtualBalance += trade.NetProfit;
+                    }
+                }
+            }
+
             Log(LogVerbosity.Trades, "START",
-                $"ORB-Prop v4 | sym={SymbolName} tf={TimeFrame} bal={Account.Balance:F2} " +
+                $"ORB-Prop v4.1 | sym={SymbolName} tf={TimeFrame} bal={Account.Balance:F2} " +
+                (VirtualCapital > 0 ? $"vbal={_virtualBalance:F2} " : "") +
                 $"pip={EffectivePip():F2}(sym={Symbol.PipSize}) autoSession={AutoUsSession} " +
                 $"news={UseNewsFilter}({_newsEvents.Count} esem.) rvol={UseRelVolFilter}");
         }
@@ -480,7 +509,7 @@ namespace cAlgo.Robots
             double volume = CalculateVolume(slDistance);
             if (volume <= 0) { NoEntry("ZERO_VOL", "számolt volumen 0 vagy minimum alatt"); return; }
 
-            double riskMoney = Account.Balance * (RiskPercent / 100.0);
+            double riskMoney = CurrentVirtualBalance * (RiskPercent / 100.0);
 
             var result = ExecuteMarketOrder(dir, SymbolName, volume, Label, slPipsNative, tpPipsNative);
             if (result.IsSuccessful)
@@ -568,6 +597,11 @@ namespace cAlgo.Robots
                 $"grossPL={p.GrossProfit:F2} netPL={p.NetProfit:F2} comm={p.Commissions:F2} " +
                 $"swap={p.Swap:F2} -> bal={Account.Balance:F2} eq={Account.Equity:F2}");
 
+            if (VirtualCapital > 0)
+            {
+                _virtualBalance += p.NetProfit;
+            }
+
             _initialRiskPips = 0;
             _beDone = false;
         }
@@ -612,7 +646,7 @@ namespace cAlgo.Robots
         private double CalculateVolume(double stopDistancePrice)
         {
             if (stopDistancePrice <= 0 || Symbol.PipValue <= 0 || Symbol.PipSize <= 0) return 0;
-            double riskAmount = Account.Balance * (RiskPercent / 100.0);
+            double riskAmount = CurrentVirtualBalance * (RiskPercent / 100.0);
             double valuePerPrice = Symbol.PipValue / Symbol.PipSize; // számla-deviza / 1.0 árfolyam / 1 egység
             double rawVolume = riskAmount / (stopDistancePrice * valuePerPrice);
             double volume = Symbol.NormalizeVolumeInUnits(rawVolume, RoundingMode.Down);
