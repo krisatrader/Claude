@@ -9,7 +9,7 @@ using cAlgo.API.Internals;
 namespace cAlgo.Robots
 {
     /// <summary>
-    /// ORB-Prop v4.1 — Opening Range Breakout cBot index CFD-ekre (FTMO US100 / US30 / US500).
+    /// ORB-Prop v4.2 — Opening Range Breakout cBot index CFD-ekre (FTMO US100 / US30 / US500).
     /// KRISA
     /// Verziótörténet (a felülvizsgálati megjegyzések beépítve):
     ///   (1) PIP paraméter: a küszöbök és a napló mértékegysége; alapért. FTMO US100 (1 pont = 1.0).
@@ -20,6 +20,12 @@ namespace cAlgo.Robots
     ///   (5) Amerikai félnapos ünnepeket nem kezel külön — lásd a kódban.
     ///   (6) Virtual Capital: Virtuális alaptőke paraméter pozícióméretezéshez tőkeallokáció esetén (pl. 25k futás 50k-s számlán).
     ///       A drawdown védelem továbbra is a teljes valós számlát védi a szabálysértés ellen.
+    ///
+    /// Ajánlott beállítások szimbólumonként:
+    ///   Szimbólum          Beállított PipSize    Min OR Width (pips)    Valós minimális sávméret
+    ///   US100 (NASDAQ)     1.0                   30.0                   30 indexpont
+    ///   US500 (S&P 500)    1.0                   8.0                    8 indexpont
+    ///   XAUUSD (Arany)     0.1                   30.0                   3.0 USD ($3.00)
     ///
     /// Korábbi alapok: auto US szakasz + DST, relatív volumen (Stocks in Play) szűrő, hír-szűrő,
     /// részletes naplózás, fix töredékes kockázat, nincs overnight kitettség.
