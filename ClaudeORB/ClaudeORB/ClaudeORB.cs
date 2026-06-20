@@ -9,7 +9,7 @@ using cAlgo.API.Internals;
 namespace cAlgo.Robots
 {
     /// <summary>
-    /// ORB-Prop v4.2 — Opening Range Breakout cBot index CFD-ekre (FTMO US100 / US30 / US500).
+    /// ORB-Prop v4.3 — Opening Range Breakout cBot index CFD-ekre (FTMO US100 / US30 / US500).
     /// KRISA
     /// Verziótörténet (a felülvizsgálati megjegyzések beépítve):
     ///   (1) PIP paraméter: a küszöbök és a napló mértékegysége; alapért. FTMO US100 (1 pont = 1.0).
@@ -20,6 +20,8 @@ namespace cAlgo.Robots
     ///   (5) Amerikai félnapos ünnepeket nem kezel külön — lásd a kódban.
     ///   (6) Virtual Capital: Virtuális alaptőke paraméter pozícióméretezéshez tőkeallokáció esetén (pl. 25k futás 50k-s számlán).
     ///       A drawdown védelem továbbra is a teljes valós számlát védi a szabálysértés ellen.
+    ///   (7) Cooldown szűrő: 2 egymást követő veszteség után a robot X napig (alapért: 3 nap) nem nyit új pozíciót.
+    ///       Ha a paraméter értéke 0, a lehűlési időszak ki van kapcsolva.
     ///
     /// Ajánlott beállítások szimbólumonként:
     ///   Szimbólum          Beállított PipSize    Min OR Width (pips)    Valós minimális sávméret
@@ -64,6 +66,9 @@ namespace cAlgo.Robots
 
         [Parameter("Virtual Capital (0=Auto)", Group = "Risk", DefaultValue = 0.0, MinValue = 0.0, MaxValue = 10000000.0)]
         public double VirtualCapital { get; set; }
+
+        [Parameter("Loss Cooldown Days (0=Off)", Group = "Risk", DefaultValue = 3, MinValue = 0, MaxValue = 10)]
+        public int CooldownDays { get; set; }
 
         // ── Paraméterek: Szakasz ─────────────────────────────────
         [Parameter("Auto US Session (DST)", Group = "Session", DefaultValue = true)]
@@ -187,6 +192,10 @@ namespace cAlgo.Robots
             }
         }
 
+        // ── Állapot: lehűlési időszak ────────────────────────────
+        private int _consecutiveLosses;
+        private DateTime _cooldownUntil = DateTime.MinValue;
+
         // ── Állapot: hírek ───────────────────────────────────────
         private readonly List<DateTime> _newsEvents = new List<DateTime>();
 
@@ -208,20 +217,47 @@ namespace cAlgo.Robots
             Positions.Closed += OnPositionClosed;
 
             _virtualBalance = VirtualCapital;
+            _consecutiveLosses = 0;
+            _cooldownUntil = DateTime.MinValue;
+
+            // Reconstruct state from history
+            var myTrades = History
+                .Where(t => t.Label == Label && t.SymbolName == SymbolName)
+                .OrderBy(t => t.ClosingTime)
+                .ToList();
+
             if (VirtualCapital > 0)
             {
-                foreach (var trade in History)
+                foreach (var trade in myTrades)
                 {
-                    if (trade.Label == Label && trade.SymbolName == SymbolName)
+                    _virtualBalance += trade.NetProfit;
+                }
+            }
+
+            if (CooldownDays > 0)
+            {
+                foreach (var trade in myTrades)
+                {
+                    if (trade.NetProfit < 0)
                     {
-                        _virtualBalance += trade.NetProfit;
+                        _consecutiveLosses++;
+                        if (_consecutiveLosses >= 2)
+                        {
+                            _cooldownUntil = trade.ClosingTime.Date.AddDays(CooldownDays);
+                        }
+                    }
+                    else if (trade.NetProfit > 0)
+                    {
+                        _consecutiveLosses = 0;
+                        _cooldownUntil = DateTime.MinValue;
                     }
                 }
             }
 
             Log(LogVerbosity.Trades, "START",
-                $"ORB-Prop v4.1 | sym={SymbolName} tf={TimeFrame} bal={Account.Balance:F2} " +
+                $"ORB-Prop v4.3 | sym={SymbolName} tf={TimeFrame} bal={Account.Balance:F2} " +
                 (VirtualCapital > 0 ? $"vbal={_virtualBalance:F2} " : "") +
+                (CooldownDays > 0 && Server.Time.Date < _cooldownUntil ? $"cooldownUntil={_cooldownUntil:yyyy-MM-dd} " : "") +
                 $"pip={EffectivePip():F2}(sym={Symbol.PipSize}) autoSession={AutoUsSession} " +
                 $"news={UseNewsFilter}({_newsEvents.Count} esem.) rvol={UseRelVolFilter}");
         }
@@ -608,6 +644,24 @@ namespace cAlgo.Robots
                 _virtualBalance += p.NetProfit;
             }
 
+            if (CooldownDays > 0)
+            {
+                if (p.NetProfit < 0)
+                {
+                    _consecutiveLosses++;
+                    if (_consecutiveLosses >= 2)
+                    {
+                        _cooldownUntil = Server.Time.Date.AddDays(CooldownDays);
+                        Log(LogVerbosity.Trades, "COOLDOWN-SET", $"2 egymást követő veszteség. Lehűlés eddig: {_cooldownUntil:yyyy-MM-dd}");
+                    }
+                }
+                else if (p.NetProfit > 0)
+                {
+                    _consecutiveLosses = 0;
+                    _cooldownUntil = DateTime.MinValue;
+                }
+            }
+
             _initialRiskPips = 0;
             _beDone = false;
         }
@@ -615,6 +669,13 @@ namespace cAlgo.Robots
         // ── KOCKÁZAT ─────────────────────────────────────────────
         private bool CheckRiskGate()
         {
+            // Cooldown szűrő ellenőrzése
+            if (CooldownDays > 0 && Server.Time.Date < _cooldownUntil)
+            {
+                NoEntry("COOLDOWN", $"lehűlési időszak aktív {_cooldownUntil:yyyy-MM-dd}-ig");
+                return false;
+            }
+
             // Napi DD: az aznapi induló egyenleghez mérve (FTMO napi limit logikája).
             double dailyDD = (_dailyStartBalance - Account.Equity) / _dailyStartBalance * 100.0;
             if (dailyDD >= MaxDailyDrawdownPct)
